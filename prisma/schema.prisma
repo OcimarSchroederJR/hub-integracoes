@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Parceiro {
+  id       String   @id @default(uuid())
+  codigo   String   @unique @db.VarChar(32)
+  nome     String   @db.VarChar(191)
+  criadoEm DateTime @default(now())
+
+  execucoes ExecucaoIntegracao[]
+  dividas   Divida[]
+}
+
+enum SituacaoExecucao {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDA
+  FALHA
+}
+
+model ExecucaoIntegracao {
+  id                String            @id @default(uuid())
+  parceiroId        String
+  parceiro          Parceiro          @relation(fields: [parceiroId], references: [id])
+  correlationId     String            @unique @db.VarChar(191)
+  situacao          SituacaoExecucao  @default(PENDENTE)
+  coletaConcluida   Boolean           @default(false)
+  totalRecebidos    Int               @default(0)
+  totalPersistidos  Int               @default(0)
+  totalRejeitados   Int               @default(0)
+  totalFalhas       Int               @default(0)
+  iniciadaEm        DateTime          @default(now())
+  concluidaEm       DateTime?
+  duracaoMs         Int?
+
+  registros RegistroIntegracao[]
+
+  @@index([parceiroId, situacao])
+}
+
+enum SituacaoRegistro {
+  PENDENTE
+  PERSISTIDO
+  REJEITADO
+  FALHA
+}
+
+model RegistroIntegracao {
+  id                   String              @id @default(uuid())
+  execucaoId           String
+  execucao             ExecucaoIntegracao  @relation(fields: [execucaoId], references: [id])
+  dividaId             String?
+  divida               Divida?             @relation(fields: [dividaId], references: [id])
+  identificadorExterno String              @db.VarChar(191)
+  situacao             SituacaoRegistro    @default(PENDENTE)
+  motivoRejeicao        String?            @db.Text
+  tentativas           Int                 @default(0)
+  payloadBruto         String              @db.LongText
+  criadoEm             DateTime            @default(now())
+  atualizadoEm         DateTime            @updatedAt
+
+  @@index([execucaoId, situacao])
+}
+
+model Devedor {
+  id           String   @id @default(uuid())
+  documento    String   @unique @db.VarChar(14)
+  nome         String   @db.VarChar(191)
+  telefones    Json
+  emails       Json
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  dividas Divida[]
+}
+
+enum SituacaoDivida {
+  EM_ATRASO
+  EM_NEGOCIACAO
+  QUITADA
+  CANCELADA
+}
+
+model Divida {
+  id                String         @id @default(uuid())
+  devedorId         String
+  devedor           Devedor        @relation(fields: [devedorId], references: [id])
+  parceiroId        String
+  parceiro          Parceiro       @relation(fields: [parceiroId], references: [id])
+  numeroContrato    String         @db.VarChar(191)
+  valorOriginal     Int
+  valorAtualizado   Int
+  dataVencimento    DateTime
+  situacao          SituacaoDivida @default(EM_ATRASO)
+  chaveIdempotencia String         @unique @db.VarChar(191)
+  criadoEm          DateTime       @default(now())
+  atualizadoEm      DateTime       @updatedAt
+
+  registros RegistroIntegracao[]
+
+  @@index([parceiroId, situacao])
+  @@index([dataVencimento])
+}
