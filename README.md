@@ -1,0 +1,108 @@
+# Hub de Integrações com Parceiros
+
+Serviço backend que recebe carteiras de cobrança de parceiros com formatos e protocolos distintos, normaliza os dados em um modelo canônico único e processa cada registro de forma assíncrona, com garantia de idempotência e recuperação de falhas.
+
+`NestJS` · `BullMQ` · `MySQL` · `DynamoDB` · `AWS` · `Docker`
+
+---
+
+## O problema
+
+Dois parceiros entregam exatamente a mesma informação de maneiras incompatíveis.
+
+| | Parceiro Alfa | Parceiro Beta |
+|---|---|---|
+| Transporte | API REST paginada por cursor | Arquivo CSV |
+| Codificação | UTF-8 | latin-1 |
+| Valores | centavos como inteiro | `1.580,00` |
+| Datas | `2024-03-15` | `15/03/2024` |
+| Documento | apenas dígitos | ora com máscara, ora sem |
+| Retorno | `POST` autenticado | webhook em formato próprio |
+
+Escrever um importador para cada parceiro funciona com dois. Com doze, vira doze bases de código para manter. Este projeto resolve isso confinando toda diferença em uma camada de adaptadores, de modo que o domínio nunca saiba de qual parceiro o dado veio.
+
+**Incluir um terceiro parceiro custa um diretório novo em `src/parceiros` e uma linha em `RegistroAdaptadores`. Nenhum arquivo de `src/dominio` ou `src/integracao` é alterado.** O procedimento está em [docs/NOVO_PARCEIRO.md](docs/NOVO_PARCEIRO.md).
+
+---
+
+## Status do projeto
+
+Em desenvolvimento, seguindo o roadmap em fases de [docs/REQUISITOS_HUB_INTEGRACOES.md](docs/REQUISITOS_HUB_INTEGRACOES.md). Esta seção é atualizada a cada marco concluído.
+
+- [x] Fase 1 — esqueleto: NestJS, docker compose, mock Alfa sem falhas, adaptador Alfa, fila de normalização, endpoints básicos. Marco verificado: uma chamada importa os 500 registros da carteira mock e o banco reflete os dados corretamente, com a mesma importação repetida três vezes seguidas mantendo a contagem de dívidas constante.
+- [ ] Fase 2 — idempotência sob falha simulada, validação com rejeição, retry e fila de mortos, adaptador Beta, testes de integração
+- [ ] Fase 3 — S3, DynamoDB, métricas Prometheus e Grafana, CI, deploy
+
+---
+
+## Rodando
+
+```bash
+git clone <url-do-repositorio>
+cd hub-integracoes
+cp .env.example .env
+docker compose up -d
+npm install && npx prisma migrate deploy && npm run seed
+npm run start:dev
+```
+
+Dispare uma importação e acompanhe:
+
+```bash
+curl -X POST http://localhost:3000/integracoes/alfa/execucoes
+curl http://localhost:3000/execucoes/{execucaoId}
+```
+
+Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. (Fase 3.)
+
+---
+
+## O que observar enquanto roda
+
+O mock dos parceiros falha de propósito, a partir da Fase 2. Ele devolve 429 acima de 60 requisições por minuto, 500 em cerca de 5 por cento das chamadas, latência aleatória de até 3 segundos e cerca de 5 por cento dos registros com defeito de dado. Um importador ingênuo quebra nesse cenário. O comportamento esperado aqui é outro.
+
+O limitador da fila de coleta impede que o 429 aconteça, mesmo com a carteira sendo puxada o mais rápido possível.
+
+O 500 do parceiro é retentado com backoff exponencial e a trilha de eventos registra cada tentativa.
+
+O registro com CPF inválido é rejeitado sozinho, com motivo legível, e os outros seguem sendo processados.
+
+Rodar a mesma importação três vezes mantém a contagem de dívidas constante, porque a chave de idempotência tem restrição única no banco.
+
+O painel mostra profundidade de fila, taxa de rejeição por parceiro e latência do parceiro durante tudo isso. (Fase 3.)
+
+---
+
+## Decisões de projeto
+
+As escolhas relevantes estão registradas como ADR, com contexto, alternativas descartadas e consequências.
+
+| ADR | Decisão |
+|---|---|
+| [0001](docs/adr/0001-modelo-canonico-e-adaptadores.md) | Modelo canônico com adaptadores por parceiro |
+| [0002](docs/adr/0002-idempotencia-no-banco.md) | Idempotência por restrição única, não por verificação em código |
+| [0003](docs/adr/0003-paginacao-via-fila.md) | Paginação propagada pela fila em vez de laço dentro do job |
+| [0004](docs/adr/0004-mysql-e-dynamodb.md) | MySQL para o estado, DynamoDB para a trilha de eventos |
+| [0005](docs/adr/0005-erro-de-dado-vs-erro-de-infra.md) | Erro de dado rejeita, erro de infraestrutura retenta |
+
+Complementos: [contrato de normalização](docs/CONTRATO_DE_NORMALIZACAO.md), [runbook operacional](docs/RUNBOOK.md), [benchmark](docs/BENCHMARK.md).
+
+---
+
+## Limitações conhecidas
+
+Estas são escolhas conscientes de escopo, não itens esquecidos.
+
+Não há autenticação na API interna. O serviço é desenhado para rodar atrás de um gateway. Implementar JWT aqui adicionaria código sem exercitar nenhuma competência de integração.
+
+O fluxo de saída não tem confirmação de entrega. Se o parceiro aceita o `POST` e depois perde a mensagem internamente, o hub não descobre. A solução correta seria conciliação periódica comparando situação local e remota, descrita mas não implementada.
+
+A trilha de eventos em DynamoDB não tem política de expiração. Em volume real, cresce indefinidamente e precisaria de TTL.
+
+O reprocessamento em massa não tem limite de taxa próprio. Reprocessar uma execução de 100 mil registros enfileira tudo de uma vez e pode pressionar o parceiro.
+
+---
+
+## Convenção de commits
+
+`tipo(escopo): descrição no imperativo`, com corpo explicando o porquê quando a decisão não for óbvia. Tipos usados: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`.
