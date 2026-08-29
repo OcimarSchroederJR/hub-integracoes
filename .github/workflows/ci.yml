@@ -75,11 +75,14 @@ jobs:
             -e PARCEIRO_BETA_WEBHOOK_URL=http://localhost:4000/beta/webhook \
             hub-integracoes:ci
 
-          # curl com -w já imprime "000" (nunca falha o comando em si) quando a
-          # conexão é recusada, então checar so o exit code do curl não bastava
-          # -- e foi exatamente esse bug que a primeira versão deste passo tinha.
+          # Os passos do GitHub Actions rodam com "bash -e": o proprio exit
+          # code do curl (7 = conexao recusada) aborta o script inteiro na
+          # primeira tentativa, antes do loop sequer chegar no "if" -- por
+          # isso o "|| true", so para nao propagar esse exit code. curl com
+          # -w ja imprime "000" no lugar do http_code quando a conexao
+          # falha, entao $codigo continua utilizavel mesmo nesse caso.
           for i in $(seq 1 20); do
-            codigo=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health)
+            codigo=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || true)
             if [ "$codigo" = "200" ] || [ "$codigo" = "503" ]; then
               echo "Container respondeu em /health com HTTP $codigo (S3/DynamoDB não disponíveis neste job, 503 é esperado)"
               exit 0
