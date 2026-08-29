@@ -1,12 +1,12 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
 import { ErroDeDado } from '../../dominio/erros/erro-de-dado';
 import { RegistroCanonico } from '../../dominio/entidades/registro-canonico';
 import { calcularChaveIdempotencia } from '../../dominio/servicos/chave-idempotencia';
-import { FILA_NORMALIZACAO, JobNormalizacao } from './constantes';
+import { FILA_ENVIO, FILA_NORMALIZACAO, JobEnvio, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
 
 const CONCORRENCIA_NORMALIZACAO = Number(process.env.FILA_CONCORRENCIA_NORMALIZACAO) || 10;
@@ -26,6 +26,7 @@ export class NormalizacaoProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly registroAdaptadores: RegistroAdaptadores,
     private readonly avaliadorConclusao: AvaliadorConclusaoService,
+    @InjectQueue(FILA_ENVIO) private readonly filaEnvio: Queue<JobEnvio>,
   ) {
     super();
   }
@@ -48,13 +49,52 @@ export class NormalizacaoProcessor extends WorkerHost {
     await this.avaliadorConclusao.avaliar(execucaoId);
   }
 
+  /**
+   * Falha de infraestrutura relançada em process() volta para o retry do
+   * BullMQ (ADR 0005). Só quando a última tentativa se esgota é que o
+   * registro vira FALHA de verdade, com o payload bruto preservado para
+   * reprocessamento manual (RF08/RF09).
+   */
+  @OnWorkerEvent('failed')
+  async aoEsgotarTentativas(job: Job<JobNormalizacao> | undefined, erro: Error): Promise<void> {
+    if (!job) return;
+
+    const tentativasMaximas = job.opts.attempts ?? 1;
+    if (job.attemptsMade < tentativasMaximas) {
+      return;
+    }
+
+    const { execucaoId, itemBruto } = job.data;
+    this.logger.error(
+      `Registro em falha após ${job.attemptsMade} tentativas (${identificadorParaLog(itemBruto)}): ${erro.message}`,
+    );
+
+    await this.prisma.registroIntegracao.create({
+      data: {
+        execucaoId,
+        identificadorExterno: identificadorParaLog(itemBruto),
+        situacao: 'FALHA',
+        motivoRejeicao: erro.message,
+        tentativas: job.attemptsMade,
+        payloadBruto: JSON.stringify(itemBruto),
+      },
+    });
+
+    await this.prisma.execucaoIntegracao.update({
+      where: { id: execucaoId },
+      data: { totalFalhas: { increment: 1 } },
+    });
+
+    await this.avaliadorConclusao.avaliar(execucaoId);
+  }
+
   private async persistir(
     execucaoId: string,
     parceiroCodigo: string,
     canonico: RegistroCanonico,
     itemBruto: unknown,
   ): Promise<void> {
-    const [devedor, parceiro] = await Promise.all([
+    const [devedor, parceiro, dividaAnterior] = await Promise.all([
       this.prisma.devedor.upsert({
         where: { documento: canonico.documento },
         update: { nome: canonico.nome, telefones: canonico.telefones, emails: canonico.emails },
@@ -66,6 +106,15 @@ export class NormalizacaoProcessor extends WorkerHost {
         },
       }),
       this.prisma.parceiro.findUniqueOrThrow({ where: { codigo: parceiroCodigo } }),
+      this.prisma.divida.findUnique({
+        where: {
+          chaveIdempotencia: calcularChaveIdempotencia(
+            parceiroCodigo,
+            canonico.identificadorExterno,
+            canonico.numeroContrato,
+          ),
+        },
+      }),
     ]);
 
     const chaveIdempotencia = calcularChaveIdempotencia(
@@ -108,6 +157,18 @@ export class NormalizacaoProcessor extends WorkerHost {
       where: { id: execucaoId },
       data: { totalPersistidos: { increment: 1 } },
     });
+
+    if (dividaAnterior && dividaAnterior.situacao !== canonico.situacao) {
+      await this.filaEnvio.add('enviar-atualizacao', {
+        parceiroCodigo,
+        atualizacao: {
+          identificadorExterno: canonico.identificadorExterno,
+          numeroContrato: canonico.numeroContrato,
+          novaSituacao: canonico.situacao,
+          ocorridoEm: new Date().toISOString(),
+        },
+      } satisfies JobEnvio);
+    }
   }
 
   private async registrarRejeicao(execucaoId: string, itemBruto: unknown, motivo: string): Promise<void> {

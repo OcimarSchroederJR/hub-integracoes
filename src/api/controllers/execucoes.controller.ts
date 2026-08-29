@@ -1,10 +1,14 @@
 import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { SituacaoRegistro } from '@prisma/client';
 import { ExecucaoService } from '../../integracao/execucao.service';
+import { ReprocessamentoService } from '../../integracao/reprocessamento.service';
 
 @Controller()
 export class ExecucoesController {
-  constructor(private readonly execucaoService: ExecucaoService) {}
+  constructor(
+    private readonly execucaoService: ExecucaoService,
+    private readonly reprocessamentoService: ReprocessamentoService,
+  ) {}
 
   @Post('integracoes/:parceiro/execucoes')
   @HttpCode(HttpStatus.ACCEPTED)
@@ -20,5 +24,17 @@ export class ExecucoesController {
   @Get('execucoes/:id/registros')
   listarRegistros(@Param('id') id: string, @Query('situacao') situacao?: SituacaoRegistro) {
     return this.execucaoService.listarRegistros(id, situacao);
+  }
+
+  @Post('execucoes/:id/reprocessar')
+  @HttpCode(HttpStatus.ACCEPTED)
+  reprocessarExecucao(@Param('id') id: string) {
+    return this.reprocessamentoService.reprocessarExecucao(id);
+  }
+
+  @Post('registros/:id/reprocessar')
+  @HttpCode(HttpStatus.ACCEPTED)
+  reprocessarRegistro(@Param('id') id: string) {
+    return this.reprocessamentoService.reprocessarRegistro(id);
   }
 }

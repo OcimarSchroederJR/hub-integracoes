@@ -3,11 +3,22 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EnvConfig } from '../config/env.schema';
 import { ParceirosModule } from '../parceiros/parceiros.module';
-import { FILA_COLETA, FILA_NORMALIZACAO } from './filas/constantes';
+import { FILA_COLETA, FILA_ENVIO, FILA_NORMALIZACAO } from './filas/constantes';
 import { ColetaProcessor } from './filas/coleta.processor';
 import { NormalizacaoProcessor } from './filas/normalizacao.processor';
+import { EnvioProcessor } from './filas/envio.processor';
 import { AvaliadorConclusaoService } from './filas/avaliador-conclusao.service';
 import { ExecucaoService } from './execucao.service';
+import { ReprocessamentoService } from './reprocessamento.service';
+
+const TENTATIVAS_MAXIMAS = Number(process.env.FILA_TENTATIVAS_MAXIMAS) || 5;
+
+const OPCOES_PADRAO_JOB = {
+  attempts: TENTATIVAS_MAXIMAS,
+  backoff: { type: 'exponential' as const, delay: 2_000 },
+  removeOnComplete: { age: 86_400 },
+  removeOnFail: false,
+};
 
 @Module({
   imports: [
@@ -23,27 +34,19 @@ import { ExecucaoService } from './execucao.service';
       }),
     }),
     BullModule.registerQueue(
-      {
-        name: FILA_COLETA,
-        defaultJobOptions: {
-          attempts: 5,
-          backoff: { type: 'exponential', delay: 2_000 },
-          removeOnComplete: { age: 86_400 },
-          removeOnFail: false,
-        },
-      },
-      {
-        name: FILA_NORMALIZACAO,
-        defaultJobOptions: {
-          attempts: 5,
-          backoff: { type: 'exponential', delay: 2_000 },
-          removeOnComplete: { age: 86_400 },
-          removeOnFail: false,
-        },
-      },
+      { name: FILA_COLETA, defaultJobOptions: OPCOES_PADRAO_JOB },
+      { name: FILA_NORMALIZACAO, defaultJobOptions: OPCOES_PADRAO_JOB },
+      { name: FILA_ENVIO, defaultJobOptions: OPCOES_PADRAO_JOB },
     ),
   ],
-  providers: [ColetaProcessor, NormalizacaoProcessor, AvaliadorConclusaoService, ExecucaoService],
-  exports: [ExecucaoService],
+  providers: [
+    ColetaProcessor,
+    NormalizacaoProcessor,
+    EnvioProcessor,
+    AvaliadorConclusaoService,
+    ExecucaoService,
+    ReprocessamentoService,
+  ],
+  exports: [ExecucaoService, ReprocessamentoService],
 })
 export class IntegracaoModule {}

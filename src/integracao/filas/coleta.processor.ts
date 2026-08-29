@@ -1,4 +1,4 @@
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -66,5 +66,19 @@ export class ColetaProcessor extends WorkerHost {
       data: { coletaConcluida: true },
     });
     await this.avaliadorConclusao.avaliar(execucaoId);
+  }
+
+  /**
+   * Só loga: uma falha de coleta é retentada pelo BullMQ como qualquer
+   * outra (nada foi persistido ainda para essa página). Se as tentativas
+   * se esgotarem, a execução fica parada em PROCESSANDO -- o cenário que
+   * o RUNBOOK.md descreve em "execução parada em PROCESSANDO".
+   */
+  @OnWorkerEvent('failed')
+  logarFalhaDeColeta(job: Job<JobColeta> | undefined, erro: Error): void {
+    if (!job) return;
+    this.logger.warn(
+      `Falha ao coletar página de "${job.data.parceiroCodigo}" (tentativa ${job.attemptsMade}/${job.opts.attempts}): ${erro.message}`,
+    );
   }
 }
