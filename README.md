@@ -33,7 +33,7 @@ Em desenvolvimento, seguindo o roadmap em fases de [docs/REQUISITOS_HUB_INTEGRAC
 
 - [x] Fase 1 — esqueleto: NestJS, docker compose, mock Alfa sem falhas, adaptador Alfa, fila de normalização, endpoints básicos. Marco verificado: uma chamada importa os 500 registros da carteira mock e o banco reflete os dados corretamente, com a mesma importação repetida três vezes seguidas mantendo a contagem de dívidas constante.
 - [x] Fase 2 — mock Alfa com 429/500/latência/dado inválido de verdade, adaptador Beta (CSV, latin-1, vírgula decimal, data brasileira), fila de mortos, reprocessamento manual, envio de atualização nos dois formatos, testes de integração com MySQL e Redis reais em CI. Marco verificado: a mesma carteira importada três vezes não duplica dívida, um lote com registro defeituoso rejeita só ele, e duas chamadas simultâneas de disparo não criam execução duplicada — os três com teste automatizado rodando de verdade no pipeline, não só localmente.
-- [ ] Fase 3 — S3, DynamoDB, métricas Prometheus e Grafana, deploy
+- [ ] Fase 3 — em andamento. Feito: payload bruto de cada página arquivado em S3/LocalStack antes de qualquer transformação (RF02), `/health` verificando o armazenamento também. Falta: trilha de eventos em DynamoDB, métricas Prometheus e Grafana, deploy.
 
 ---
 
@@ -81,6 +81,8 @@ O registro com documento inválido é rejeitado sozinho, com motivo legível, e 
 Rodar a mesma importação três vezes mantém a contagem de dívidas constante, porque a chave de idempotência tem restrição única no banco. Duas chamadas simultâneas de disparo para o mesmo parceiro também não criam execução duplicada, pela mesma razão: a trava é uma restrição única (`ExecucaoAtiva.parceiroId`), não uma consulta seguida de inserção.
 
 Quando a situação de uma dívida muda entre duas importações, o hub enfileira o envio da atualização ao parceiro de origem no formato que ele espera — `POST` para o Alfa, webhook para o Beta — sem que o domínio saiba dessa diferença.
+
+Cada página coletada é gravada íntegra em `raw/{parceiro}/{execucaoId}/{sequencial}.{json,csv}` no S3 (LocalStack em desenvolvimento) antes de qualquer transformação. Uma execução que falha na normalização ainda deixa o payload bruto disponível para inspeção — verifique com `docker exec <container-do-localstack> awslocal s3 ls s3://hub-raw-payloads/raw/alfa/{execucaoId}/`.
 
 O painel mostra profundidade de fila, taxa de rejeição por parceiro e latência do parceiro durante tudo isso. (Fase 3.)
 
