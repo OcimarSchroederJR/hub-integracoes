@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
+import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
 import { FILA_ENVIO, JobEnvio } from './constantes';
 
 @Processor(FILA_ENVIO, { concurrency: 5 })
@@ -13,6 +14,10 @@ export class EnvioProcessor extends WorkerHost {
   }
 
   async process(job: Job<JobEnvio>): Promise<void> {
+    return executarComCorrelationId(job.data.correlationId, () => this.processar(job));
+  }
+
+  private async processar(job: Job<JobEnvio>): Promise<void> {
     const { parceiroCodigo, atualizacao } = job.data;
     const adaptador = this.registroAdaptadores.obter(parceiroCodigo);
 

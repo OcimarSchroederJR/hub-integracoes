@@ -6,6 +6,7 @@ import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
 import { ErroDeDado } from '../../dominio/erros/erro-de-dado';
 import { RegistroCanonico } from '../../dominio/entidades/registro-canonico';
 import { calcularChaveIdempotencia } from '../../dominio/servicos/chave-idempotencia';
+import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
 import { FILA_ENVIO, FILA_NORMALIZACAO, JobEnvio, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
 
@@ -32,12 +33,16 @@ export class NormalizacaoProcessor extends WorkerHost {
   }
 
   async process(job: Job<JobNormalizacao>): Promise<void> {
-    const { execucaoId, parceiroCodigo, itemBruto } = job.data;
+    return executarComCorrelationId(job.data.correlationId, () => this.processar(job));
+  }
+
+  private async processar(job: Job<JobNormalizacao>): Promise<void> {
+    const { execucaoId, correlationId, parceiroCodigo, itemBruto } = job.data;
     const adaptador = this.registroAdaptadores.obter(parceiroCodigo);
 
     try {
       const canonico = adaptador.normalizar(itemBruto);
-      await this.persistir(execucaoId, parceiroCodigo, canonico, itemBruto);
+      await this.persistir(execucaoId, correlationId, parceiroCodigo, canonico, itemBruto);
     } catch (erro) {
       if (!(erro instanceof ErroDeDado)) {
         throw erro;
@@ -58,7 +63,10 @@ export class NormalizacaoProcessor extends WorkerHost {
   @OnWorkerEvent('failed')
   async aoEsgotarTentativas(job: Job<JobNormalizacao> | undefined, erro: Error): Promise<void> {
     if (!job) return;
+    await executarComCorrelationId(job.data.correlationId, () => this.tratarFalhaFinal(job, erro));
+  }
 
+  private async tratarFalhaFinal(job: Job<JobNormalizacao>, erro: Error): Promise<void> {
     const tentativasMaximas = job.opts.attempts ?? 1;
     if (job.attemptsMade < tentativasMaximas) {
       return;
@@ -90,6 +98,7 @@ export class NormalizacaoProcessor extends WorkerHost {
 
   private async persistir(
     execucaoId: string,
+    correlationId: string,
     parceiroCodigo: string,
     canonico: RegistroCanonico,
     itemBruto: unknown,
@@ -160,6 +169,7 @@ export class NormalizacaoProcessor extends WorkerHost {
 
     if (dividaAnterior && dividaAnterior.situacao !== canonico.situacao) {
       await this.filaEnvio.add('enviar-atualizacao', {
+        correlationId,
         parceiroCodigo,
         atualizacao: {
           identificadorExterno: canonico.identificadorExterno,

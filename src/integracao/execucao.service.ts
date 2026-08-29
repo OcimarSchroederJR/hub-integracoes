@@ -48,6 +48,7 @@ export class ExecucaoService {
 
     await this.filaColeta.add('coletar-pagina', {
       execucaoId: execucao.id,
+      correlationId: execucao.correlationId,
       parceiroCodigo,
       cursor: null,
       sequencial: 0,

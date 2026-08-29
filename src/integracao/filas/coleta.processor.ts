@@ -4,6 +4,7 @@ import { Inject, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
 import { ArquivoBruto, ARQUIVO_BRUTO, chaveArquivoBruto } from '../../dominio/portas/arquivo-bruto.port';
+import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
 import { FILA_COLETA, FILA_NORMALIZACAO, JobColeta, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
 
@@ -28,7 +29,11 @@ export class ColetaProcessor extends WorkerHost {
   }
 
   async process(job: Job<JobColeta>): Promise<void> {
-    const { execucaoId, parceiroCodigo, cursor, sequencial } = job.data;
+    return executarComCorrelationId(job.data.correlationId, () => this.processar(job));
+  }
+
+  private async processar(job: Job<JobColeta>): Promise<void> {
+    const { execucaoId, correlationId, parceiroCodigo, cursor, sequencial } = job.data;
     const adaptador = this.registroAdaptadores.obter(parceiroCodigo);
 
     await this.prisma.execucaoIntegracao.updateMany({
@@ -54,6 +59,7 @@ export class ColetaProcessor extends WorkerHost {
     for (const item of pagina.itens) {
       await this.filaNormalizacao.add('normalizar-item', {
         execucaoId,
+        correlationId,
         parceiroCodigo,
         itemBruto: item,
       } satisfies JobNormalizacao);
@@ -62,6 +68,7 @@ export class ColetaProcessor extends WorkerHost {
     if (pagina.proximoCursor) {
       await this.filaColeta.add('coletar-pagina', {
         execucaoId,
+        correlationId,
         parceiroCodigo,
         cursor: pagina.proximoCursor,
         sequencial: sequencial + 1,
@@ -85,8 +92,10 @@ export class ColetaProcessor extends WorkerHost {
   @OnWorkerEvent('failed')
   logarFalhaDeColeta(job: Job<JobColeta> | undefined, erro: Error): void {
     if (!job) return;
-    this.logger.warn(
-      `Falha ao coletar página de "${job.data.parceiroCodigo}" (tentativa ${job.attemptsMade}/${job.opts.attempts}): ${erro.message}`,
-    );
+    executarComCorrelationId(job.data.correlationId, () => {
+      this.logger.warn(
+        `Falha ao coletar página de "${job.data.parceiroCodigo}" (tentativa ${job.attemptsMade}/${job.opts.attempts}): ${erro.message}`,
+      );
+    });
   }
 }

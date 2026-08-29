@@ -57,6 +57,7 @@ export class ReprocessamentoService {
     await this.enfileirar(
       execucao.parceiro.codigo,
       execucaoId,
+      execucao.correlationId,
       registros.map((r) => r.payloadBruto),
     );
 
@@ -96,7 +97,12 @@ export class ReprocessamentoService {
       }),
     ]);
 
-    await this.enfileirar(registro.execucao.parceiro.codigo, registro.execucaoId, [registro.payloadBruto]);
+    await this.enfileirar(
+      registro.execucao.parceiro.codigo,
+      registro.execucaoId,
+      registro.execucao.correlationId,
+      [registro.payloadBruto],
+    );
 
     return { reprocessados: 1 };
   }
@@ -104,11 +110,13 @@ export class ReprocessamentoService {
   private async enfileirar(
     parceiroCodigo: string,
     execucaoId: string,
+    correlationId: string,
     payloadsBrutos: string[],
   ): Promise<void> {
     for (const payloadBruto of payloadsBrutos) {
       await this.filaNormalizacao.add('normalizar-item', {
         execucaoId,
+        correlationId,
         parceiroCodigo,
         itemBruto: JSON.parse(payloadBruto),
       } satisfies JobNormalizacao);
