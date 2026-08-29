@@ -35,6 +35,7 @@
     "bullmq": "^5.21.2",
     "dotenv": "^16.4.5",
     "ioredis": "^5.4.1",
+    "prom-client": "^15.1.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^9.0.1",

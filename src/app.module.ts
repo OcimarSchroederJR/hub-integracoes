@@ -4,10 +4,12 @@ import { validarEnv } from './config/env.schema';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { S3Module } from './infra/s3/s3.module';
 import { DynamoModule } from './infra/dynamo/dynamo.module';
+import { ObservabilidadeModule } from './infra/observabilidade/observabilidade.module';
 import { ParceirosModule } from './parceiros/parceiros.module';
 import { IntegracaoModule } from './integracao/integracao.module';
 import { ExecucoesController } from './api/controllers/execucoes.controller';
 import { HealthController } from './api/controllers/health.controller';
+import { MetricsController } from './api/controllers/metrics.controller';
 
 @Module({
   imports: [
@@ -15,9 +17,10 @@ import { HealthController } from './api/controllers/health.controller';
     PrismaModule,
     S3Module,
     DynamoModule,
+    ObservabilidadeModule,
     ParceirosModule,
     IntegracaoModule,
   ],
-  controllers: [ExecucoesController, HealthController],
+  controllers: [ExecucoesController, HealthController, MetricsController],
 })
 export class AppModule {}
