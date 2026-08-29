@@ -33,7 +33,7 @@ Em desenvolvimento, seguindo o roadmap em fases de [docs/REQUISITOS_HUB_INTEGRAC
 
 - [x] Fase 1 — esqueleto: NestJS, docker compose, mock Alfa sem falhas, adaptador Alfa, fila de normalização, endpoints básicos. Marco verificado: uma chamada importa os 500 registros da carteira mock e o banco reflete os dados corretamente, com a mesma importação repetida três vezes seguidas mantendo a contagem de dívidas constante.
 - [x] Fase 2 — mock Alfa com 429/500/latência/dado inválido de verdade, adaptador Beta (CSV, latin-1, vírgula decimal, data brasileira), fila de mortos, reprocessamento manual, envio de atualização nos dois formatos, testes de integração com MySQL e Redis reais em CI. Marco verificado: a mesma carteira importada três vezes não duplica dívida, um lote com registro defeituoso rejeita só ele, e duas chamadas simultâneas de disparo não criam execução duplicada — os três com teste automatizado rodando de verdade no pipeline, não só localmente.
-- [ ] Fase 3 — em andamento. Feito: payload bruto de cada página arquivado em S3/LocalStack antes de qualquer transformação (RF02); trilha de eventos em DynamoDB por registro, com `correlationId` propagado de ponta a ponta e log estruturado em JSON (RF07, RNF06); `/health` verificando banco, fila e armazenamento; `GET /metrics` em formato Prometheus e painel Grafana provisionado como código (RF12, RNF06). Falta: deploy.
+- [x] Fase 3 — payload bruto de cada página arquivado em S3/LocalStack antes de qualquer transformação (RF02); trilha de eventos em DynamoDB por registro, com `correlationId` propagado de ponta a ponta e log estruturado em JSON (RF07, RNF06); `/health` verificando banco, fila e armazenamento; `GET /metrics` em formato Prometheus e painel Grafana provisionado como código (RF12, RNF06). Deploy em nuvem foi deixado de fora por decisão consciente de escopo — ver Limitações conhecidas.
 
 ---
 
@@ -127,6 +127,8 @@ O reprocessamento em massa não tem limite de taxa próprio. Reprocessar uma exe
 Uma página de coleta que esgota as cinco tentativas de retry não tem recuperação automática: a execução fica presa em `PROCESSANDO` até alguém reenfileirar manualmente o job com o cursor da última página bem-sucedida, como o [runbook](docs/RUNBOOK.md) descreve. Isso foi encontrado testando o mock com falha simulada, não é hipotético.
 
 Os testes de integração (`npm run test:e2e`) sobem os próprios containers de MySQL, Redis e LocalStack (S3 + DynamoDB) via `dockerode`, direto, sem a biblioteca `testcontainers`: ela tem uma incompatibilidade conhecida com o Docker Desktop no Windows por named pipe (falha em "create container" mesmo com o container auxiliar de limpeza desabilitado). Rodam localmente em Linux/macOS e no [CI](.github/workflows/ci.yml).
+
+Não há deploy em nuvem. O sistema roda via `docker compose` local e no CI; ECS Fargate/EC2 com Secrets Manager, previstos no roadmap original, exigiriam uma conta AWS real e custo recorrente, o que não faz sentido para manter ligado permanentemente num projeto de portfólio. O [`Dockerfile`](Dockerfile) do hub já builda e roda de ponta a ponta (testado manualmente contra o `docker-compose.yml` local), variáveis de ambiente são validadas na inicialização, e `AWS_ENDPOINT` é opcional — sem ele o SDK aponta pro S3/DynamoDB reais em vez do LocalStack. Falta só apontar isso para uma conta AWS de verdade.
 
 ---
 
