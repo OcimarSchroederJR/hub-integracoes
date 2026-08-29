@@ -87,7 +87,7 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
   afterAll(async () => {
     await app.close();
     await derrubarAmbiente(ambiente);
-  });
+  }, 60_000);
 
   afterEach(() => {
     nock.cleanAll();
