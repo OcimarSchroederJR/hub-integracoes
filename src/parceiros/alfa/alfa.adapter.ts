@@ -40,6 +40,17 @@ export class AlfaAdapter implements ParceiroAdapter {
         continue;
       }
       const item = validacao.data;
+      if (item.contracts.length === 0) {
+        itens.push({
+          externalId: item.externalId,
+          taxId: item.taxId,
+          customerName: item.customerName,
+          contract: null,
+          phones: item.contacts.phones,
+          emails: item.contacts.emails,
+        });
+        continue;
+      }
       for (const contract of item.contracts) {
         itens.push({
           externalId: item.externalId,

@@ -12,7 +12,7 @@ const itemAlfaAchatadoSchema = z.object({
   externalId: z.string(),
   taxId: z.string(),
   customerName: z.string(),
-  contract: contratoAlfaSchema,
+  contract: contratoAlfaSchema.nullable(),
   phones: z.array(z.string()),
   emails: z.array(z.string()),
 });
@@ -53,6 +53,9 @@ export function normalizarAlfa(itemBruto: unknown): RegistroCanonico {
   const nome = item.customerName.trim();
   if (nome === '') {
     throw new CampoObrigatorioAusenteError('customerName');
+  }
+  if (item.contract === null) {
+    throw new CampoObrigatorioAusenteError('contracts');
   }
 
   return {

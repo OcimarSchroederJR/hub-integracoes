@@ -35,7 +35,7 @@ export interface ItemAlfaAchatado {
   externalId: string;
   taxId: string;
   customerName: string;
-  contract: ContratoAlfa;
+  contract: ContratoAlfa | null;
   phones: string[];
   emails: string[];
 }

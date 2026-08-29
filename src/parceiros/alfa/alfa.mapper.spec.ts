@@ -48,7 +48,7 @@ describe('normalizarAlfa', () => {
 
   it('rejeita item com data de vencimento no limite do formato, inexistente no calendário', () => {
     const item = itemValido();
-    item.contract.dueDate = '2024-02-31';
+    item.contract!.dueDate = '2024-02-31';
     expect(() => normalizarAlfa(item)).toThrow(ErroDeDado);
   });
 
@@ -59,7 +59,11 @@ describe('normalizarAlfa', () => {
 
   it('traduz situação desconhecida para EM_ATRASO', () => {
     const item = itemValido();
-    item.contract.status = 'ALGO_NOVO';
+    item.contract!.status = 'ALGO_NOVO';
     expect(normalizarAlfa(item).situacao).toBe('EM_ATRASO');
+  });
+
+  it('rejeita cliente sem nenhum contrato', () => {
+    expect(() => normalizarAlfa(itemValido({ contract: null }))).toThrow(ErroDeDado);
   });
 });
