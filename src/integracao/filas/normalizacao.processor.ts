@@ -1,12 +1,13 @@
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
 import { ErroDeDado } from '../../dominio/erros/erro-de-dado';
 import { RegistroCanonico } from '../../dominio/entidades/registro-canonico';
 import { calcularChaveIdempotencia } from '../../dominio/servicos/chave-idempotencia';
 import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
+import { TrilhaEventos, TRILHA_EVENTOS } from '../../dominio/portas/trilha-eventos.port';
 import { FILA_ENVIO, FILA_NORMALIZACAO, JobEnvio, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
 
@@ -27,6 +28,7 @@ export class NormalizacaoProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly registroAdaptadores: RegistroAdaptadores,
     private readonly avaliadorConclusao: AvaliadorConclusaoService,
+    @Inject(TRILHA_EVENTOS) private readonly trilhaEventos: TrilhaEventos,
     @InjectQueue(FILA_ENVIO) private readonly filaEnvio: Queue<JobEnvio>,
   ) {
     super();
@@ -48,7 +50,7 @@ export class NormalizacaoProcessor extends WorkerHost {
         throw erro;
       }
       this.logger.warn(`Registro rejeitado (${identificadorParaLog(itemBruto)}): ${erro.message}`);
-      await this.registrarRejeicao(execucaoId, itemBruto, erro.message);
+      await this.registrarRejeicao(execucaoId, correlationId, itemBruto, erro.message);
     }
 
     await this.avaliadorConclusao.avaliar(execucaoId);
@@ -72,12 +74,12 @@ export class NormalizacaoProcessor extends WorkerHost {
       return;
     }
 
-    const { execucaoId, itemBruto } = job.data;
+    const { execucaoId, correlationId, itemBruto } = job.data;
     this.logger.error(
       `Registro em falha após ${job.attemptsMade} tentativas (${identificadorParaLog(itemBruto)}): ${erro.message}`,
     );
 
-    await this.prisma.registroIntegracao.create({
+    const registro = await this.prisma.registroIntegracao.create({
       data: {
         execucaoId,
         identificadorExterno: identificadorParaLog(itemBruto),
@@ -91,6 +93,15 @@ export class NormalizacaoProcessor extends WorkerHost {
     await this.prisma.execucaoIntegracao.update({
       where: { id: execucaoId },
       data: { totalFalhas: { increment: 1 } },
+    });
+
+    await this.trilhaEventos.registrar({
+      registroId: registro.id,
+      execucaoId,
+      correlationId,
+      tipo: 'REGISTRO_FALHOU',
+      ocorridoEm: new Date().toISOString(),
+      detalhe: { motivo: erro.message, tentativas: job.attemptsMade },
     });
 
     await this.avaliadorConclusao.avaliar(execucaoId);
@@ -152,7 +163,7 @@ export class NormalizacaoProcessor extends WorkerHost {
       },
     });
 
-    await this.prisma.registroIntegracao.create({
+    const registro = await this.prisma.registroIntegracao.create({
       data: {
         execucaoId,
         dividaId: divida.id,
@@ -167,9 +178,24 @@ export class NormalizacaoProcessor extends WorkerHost {
       data: { totalPersistidos: { increment: 1 } },
     });
 
+    await this.trilhaEventos.registrar({
+      registroId: registro.id,
+      execucaoId,
+      correlationId,
+      tipo: 'REGISTRO_PERSISTIDO',
+      ocorridoEm: new Date().toISOString(),
+      detalhe: {
+        dividaId: divida.id,
+        numeroContrato: canonico.numeroContrato,
+        situacao: canonico.situacao,
+      },
+    });
+
     if (dividaAnterior && dividaAnterior.situacao !== canonico.situacao) {
       await this.filaEnvio.add('enviar-atualizacao', {
+        execucaoId,
         correlationId,
+        registroId: registro.id,
         parceiroCodigo,
         atualizacao: {
           identificadorExterno: canonico.identificadorExterno,
@@ -181,8 +207,13 @@ export class NormalizacaoProcessor extends WorkerHost {
     }
   }
 
-  private async registrarRejeicao(execucaoId: string, itemBruto: unknown, motivo: string): Promise<void> {
-    await this.prisma.registroIntegracao.create({
+  private async registrarRejeicao(
+    execucaoId: string,
+    correlationId: string,
+    itemBruto: unknown,
+    motivo: string,
+  ): Promise<void> {
+    const registro = await this.prisma.registroIntegracao.create({
       data: {
         execucaoId,
         identificadorExterno: identificadorParaLog(itemBruto),
@@ -195,6 +226,15 @@ export class NormalizacaoProcessor extends WorkerHost {
     await this.prisma.execucaoIntegracao.update({
       where: { id: execucaoId },
       data: { totalRejeitados: { increment: 1 } },
+    });
+
+    await this.trilhaEventos.registrar({
+      registroId: registro.id,
+      execucaoId,
+      correlationId,
+      tipo: 'REGISTRO_REJEITADO',
+      ocorridoEm: new Date().toISOString(),
+      detalhe: { motivo },
     });
   }
 }

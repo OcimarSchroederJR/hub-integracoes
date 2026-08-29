@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Prisma, SituacaoRegistro } from '@prisma/client';
 import { PrismaService } from '../infra/prisma/prisma.service';
 import { RegistroAdaptadores, ParceiroDesconhecidoError } from '../parceiros/registro-adaptadores';
+import { TrilhaEventos, TRILHA_EVENTOS } from '../dominio/portas/trilha-eventos.port';
 import { FILA_COLETA, JobColeta } from './filas/constantes';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class ExecucaoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registroAdaptadores: RegistroAdaptadores,
+    @Inject(TRILHA_EVENTOS) private readonly trilhaEventos: TrilhaEventos,
     @InjectQueue(FILA_COLETA) private readonly filaColeta: Queue<JobColeta>,
   ) {}
 
@@ -71,5 +73,13 @@ export class ExecucaoService {
       where: { execucaoId, ...(situacao ? { situacao } : {}) },
       orderBy: { criadoEm: 'asc' },
     });
+  }
+
+  async listarEventosDoRegistro(registroId: string) {
+    const registro = await this.prisma.registroIntegracao.findUnique({ where: { id: registroId } });
+    if (!registro) {
+      throw new NotFoundException(`Registro "${registroId}" não encontrado`);
+    }
+    return this.trilhaEventos.listarPorRegistro(registroId);
   }
 }

@@ -20,7 +20,9 @@ export interface JobNormalizacao {
 }
 
 export interface JobEnvio {
+  execucaoId: string;
   correlationId: string;
+  registroId: string;
   parceiroCodigo: string;
   atualizacao: Omit<AtualizacaoSituacao, 'ocorridoEm'> & { ocorridoEm: string };
 }

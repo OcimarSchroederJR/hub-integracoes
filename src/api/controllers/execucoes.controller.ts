@@ -37,4 +37,9 @@ export class ExecucoesController {
   reprocessarRegistro(@Param('id') id: string) {
     return this.reprocessamentoService.reprocessarRegistro(id);
   }
+
+  @Get('registros/:id/eventos')
+  listarEventosDoRegistro(@Param('id') id: string) {
+    return this.execucaoService.listarEventosDoRegistro(id);
+  }
 }
