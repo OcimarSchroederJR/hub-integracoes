@@ -75,10 +75,13 @@ jobs:
             -e PARCEIRO_BETA_WEBHOOK_URL=http://localhost:4000/beta/webhook \
             hub-integracoes:ci
 
+          # curl com -w já imprime "000" (nunca falha o comando em si) quando a
+          # conexão é recusada, então checar so o exit code do curl não bastava
+          # -- e foi exatamente esse bug que a primeira versão deste passo tinha.
           for i in $(seq 1 20); do
-            codigo=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || echo "000")
-            if [ "$codigo" != "000" ]; then
-              echo "Container respondeu em /health com HTTP $codigo"
+            codigo=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health)
+            if [ "$codigo" = "200" ] || [ "$codigo" = "503" ]; then
+              echo "Container respondeu em /health com HTTP $codigo (S3/DynamoDB não disponíveis neste job, 503 é esperado)"
               exit 0
             fi
             sleep 2
