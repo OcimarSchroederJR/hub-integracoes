@@ -27,6 +27,12 @@ function gerarCpfValido(semente: number): string {
   return base9 + calcularDigitosCpf(base9);
 }
 
+function gerarCpfComDigitoInvalido(semente: number): string {
+  const cpf = gerarCpfValido(semente);
+  const ultimoDigito = Number(cpf[cpf.length - 1]);
+  return cpf.slice(0, -1) + ((ultimoDigito + 1) % 10);
+}
+
 const NOMES = [
   'Maria Souza',
   'Joao Lima',
@@ -63,24 +69,32 @@ function gerarDataVencimento(indice: number): string {
   return base.toISOString().slice(0, 10);
 }
 
-export function gerarCarteira(quantidade: number): ClienteAlfa[] {
+export function gerarCarteira(quantidade: number, comFalhas: boolean): ClienteAlfa[] {
   const clientes: ClienteAlfa[] = [];
   for (let i = 0; i < quantidade; i++) {
     const nome = NOMES[i % NOMES.length];
     const original = 50_000 + ((i * 137) % 500_000);
+
+    const documentoInvalido = comFalhas && i % 20 === 3;
+    const contratosVazios = comFalhas && i % 20 === 11;
+
     clientes.push({
       externalId: `ALF-${String(1_000_000 + i)}`,
-      taxId: gerarCpfValido(100_000_000 + i * 7),
+      taxId: documentoInvalido
+        ? gerarCpfComDigitoInvalido(100_000_000 + i * 7)
+        : gerarCpfValido(100_000_000 + i * 7),
       customerName: `${nome} ${i}`,
-      contracts: [
-        {
-          contractNumber: `CT-${String(90_000 + i)}`,
-          originalAmountCents: original,
-          currentAmountCents: Math.round(original * 1.15),
-          dueDate: gerarDataVencimento(i),
-          status: STATUS[i % STATUS.length],
-        },
-      ],
+      contracts: contratosVazios
+        ? []
+        : [
+            {
+              contractNumber: `CT-${String(90_000 + i)}`,
+              originalAmountCents: original,
+              currentAmountCents: Math.round(original * 1.15),
+              dueDate: gerarDataVencimento(i),
+              status: STATUS[i % STATUS.length],
+            },
+          ],
       contacts: {
         phones: [`5581${String(900_000_000 + i).slice(0, 9)}`],
         emails: [`cliente${i}@exemplo.com`],
