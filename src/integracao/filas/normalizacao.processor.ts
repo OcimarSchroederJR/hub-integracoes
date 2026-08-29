@@ -7,6 +7,7 @@ import { ErroDeDado } from '../../dominio/erros/erro-de-dado';
 import { RegistroCanonico } from '../../dominio/entidades/registro-canonico';
 import { calcularChaveIdempotencia } from '../../dominio/servicos/chave-idempotencia';
 import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
+import { MetricsService } from '../../infra/observabilidade/metrics.service';
 import { TrilhaEventos, TRILHA_EVENTOS } from '../../dominio/portas/trilha-eventos.port';
 import { FILA_ENVIO, FILA_NORMALIZACAO, JobEnvio, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
@@ -29,6 +30,7 @@ export class NormalizacaoProcessor extends WorkerHost {
     private readonly registroAdaptadores: RegistroAdaptadores,
     private readonly avaliadorConclusao: AvaliadorConclusaoService,
     @Inject(TRILHA_EVENTOS) private readonly trilhaEventos: TrilhaEventos,
+    private readonly metrics: MetricsService,
     @InjectQueue(FILA_ENVIO) private readonly filaEnvio: Queue<JobEnvio>,
   ) {
     super();
@@ -50,7 +52,7 @@ export class NormalizacaoProcessor extends WorkerHost {
         throw erro;
       }
       this.logger.warn(`Registro rejeitado (${identificadorParaLog(itemBruto)}): ${erro.message}`);
-      await this.registrarRejeicao(execucaoId, correlationId, itemBruto, erro.message);
+      await this.registrarRejeicao(execucaoId, correlationId, parceiroCodigo, itemBruto, erro.message);
     }
 
     await this.avaliadorConclusao.avaliar(execucaoId);
@@ -74,7 +76,7 @@ export class NormalizacaoProcessor extends WorkerHost {
       return;
     }
 
-    const { execucaoId, correlationId, itemBruto } = job.data;
+    const { execucaoId, correlationId, parceiroCodigo, itemBruto } = job.data;
     this.logger.error(
       `Registro em falha após ${job.attemptsMade} tentativas (${identificadorParaLog(itemBruto)}): ${erro.message}`,
     );
@@ -103,6 +105,8 @@ export class NormalizacaoProcessor extends WorkerHost {
       ocorridoEm: new Date().toISOString(),
       detalhe: { motivo: erro.message, tentativas: job.attemptsMade },
     });
+
+    this.metrics.registrosProcessados.inc({ parceiro: parceiroCodigo, resultado: 'falha' });
 
     await this.avaliadorConclusao.avaliar(execucaoId);
   }
@@ -191,6 +195,8 @@ export class NormalizacaoProcessor extends WorkerHost {
       },
     });
 
+    this.metrics.registrosProcessados.inc({ parceiro: parceiroCodigo, resultado: 'persistido' });
+
     if (dividaAnterior && dividaAnterior.situacao !== canonico.situacao) {
       await this.filaEnvio.add('enviar-atualizacao', {
         execucaoId,
@@ -210,6 +216,7 @@ export class NormalizacaoProcessor extends WorkerHost {
   private async registrarRejeicao(
     execucaoId: string,
     correlationId: string,
+    parceiroCodigo: string,
     itemBruto: unknown,
     motivo: string,
   ): Promise<void> {
@@ -236,5 +243,7 @@ export class NormalizacaoProcessor extends WorkerHost {
       ocorridoEm: new Date().toISOString(),
       detalhe: { motivo },
     });
+
+    this.metrics.registrosProcessados.inc({ parceiro: parceiroCodigo, resultado: 'rejeitado' });
   }
 }
