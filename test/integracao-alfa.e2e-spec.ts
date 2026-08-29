@@ -1,0 +1,164 @@
+import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import nock from 'nock';
+import request from 'supertest';
+import { AmbienteTeste, derrubarAmbiente, subirAmbiente } from './setup/containers';
+
+const ALFA_BASE_URL = 'http://alfa-mock.test';
+
+function clienteAlfa(indice: number, sobrescritas: Record<string, unknown> = {}) {
+  return {
+    externalId: `ALF-${indice}`,
+    taxId: '52998224725',
+    customerName: `Cliente ${indice}`,
+    contracts: [
+      {
+        contractNumber: `CT-${indice}`,
+        originalAmountCents: 100_00 + indice,
+        currentAmountCents: 120_00 + indice,
+        dueDate: '2024-03-15',
+        status: 'OVERDUE',
+      },
+    ],
+    contacts: { phones: ['5581998805965'], emails: [`cliente${indice}@exemplo.com`] },
+    updatedAt: new Date().toISOString(),
+    ...sobrescritas,
+  };
+}
+
+function mockarPaginaUnica(itens: unknown[]): void {
+  nock(ALFA_BASE_URL)
+    .get('/v1/portfolio')
+    .query(true)
+    .reply(200, { data: itens, nextCursor: null, hasMore: false });
+}
+
+interface ExecucaoDto {
+  situacao: string;
+  totalRecebidos: number;
+  totalPersistidos: number;
+  totalRejeitados: number;
+  totalFalhas: number;
+}
+
+async function aguardarConclusao(
+  app: INestApplication,
+  execucaoId: string,
+  timeoutMs = 30_000,
+): Promise<ExecucaoDto> {
+  const inicio = Date.now();
+  while (Date.now() - inicio < timeoutMs) {
+    const resposta = await request(app.getHttpServer()).get(`/execucoes/${execucaoId}`);
+    if (resposta.body.situacao === 'CONCLUIDA') {
+      return resposta.body;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw new Error(`Execução "${execucaoId}" não concluiu em ${timeoutMs}ms`);
+}
+
+describe('Importação do Parceiro Alfa (integração com MySQL e Redis reais)', () => {
+  let ambiente: AmbienteTeste;
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    ambiente = await subirAmbiente();
+
+    process.env.DATABASE_URL = ambiente.databaseUrl;
+    process.env.REDIS_HOST = ambiente.redisHost;
+    process.env.REDIS_PORT = String(ambiente.redisPort);
+    process.env.PARCEIRO_ALFA_BASE_URL = ALFA_BASE_URL;
+    process.env.PARCEIRO_ALFA_TOKEN = 'token-de-teste';
+    process.env.PARCEIRO_BETA_CSV_URL = 'http://beta-mock.test/carteira.csv';
+    process.env.PARCEIRO_BETA_WEBHOOK_URL = 'http://beta-mock.test/webhook';
+
+    const { AppModule } = await import('../src/app.module');
+
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+  }, 240_000);
+
+  afterAll(async () => {
+    await app.close();
+    await derrubarAmbiente(ambiente);
+  });
+
+  afterEach(() => {
+    nock.cleanAll();
+  });
+
+  it('rejeita o registro com documento inválido e persiste o restante do lote', async () => {
+    mockarPaginaUnica([clienteAlfa(1), clienteAlfa(2), clienteAlfa(3, { taxId: '00000000000' })]);
+
+    const disparo = await request(app.getHttpServer()).post('/integracoes/alfa/execucoes').expect(202);
+
+    const execucao = await aguardarConclusao(app, disparo.body.id);
+
+    expect(execucao.totalRecebidos).toBe(3);
+    expect(execucao.totalPersistidos).toBe(2);
+    expect(execucao.totalRejeitados).toBe(1);
+
+    const registrosRejeitados = await request(app.getHttpServer())
+      .get(`/execucoes/${disparo.body.id}/registros`)
+      .query({ situacao: 'REJEITADO' });
+
+    expect(registrosRejeitados.body).toHaveLength(1);
+    expect(registrosRejeitados.body[0].motivoRejeicao).toMatch(/Documento inválido/);
+  });
+
+  it('reprocessar a mesma carteira não duplica dívidas (ADR 0002)', async () => {
+    const itens = [clienteAlfa(101), clienteAlfa(102), clienteAlfa(103)];
+
+    mockarPaginaUnica(itens);
+    const primeiraExecucao = await request(app.getHttpServer())
+      .post('/integracoes/alfa/execucoes')
+      .expect(202);
+    const primeiroResultado = await aguardarConclusao(app, primeiraExecucao.body.id);
+    expect(primeiroResultado.totalPersistidos).toBe(3);
+
+    mockarPaginaUnica(itens);
+    const segundaExecucao = await request(app.getHttpServer())
+      .post('/integracoes/alfa/execucoes')
+      .expect(202);
+    const segundoResultado = await aguardarConclusao(app, segundaExecucao.body.id);
+    expect(segundoResultado.totalPersistidos).toBe(3);
+
+    mockarPaginaUnica(itens);
+    const terceiraExecucao = await request(app.getHttpServer())
+      .post('/integracoes/alfa/execucoes')
+      .expect(202);
+    const terceiroResultado = await aguardarConclusao(app, terceiraExecucao.body.id);
+    expect(terceiroResultado.totalPersistidos).toBe(3);
+
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    try {
+      const totalDividas = await prisma.divida.count({
+        where: {
+          chaveIdempotencia: {
+            in: itens.map((item) => `alfa:${item.externalId}:${item.contracts[0].contractNumber}`),
+          },
+        },
+      });
+      expect(totalDividas).toBe(3);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  it('rejeita a segunda chamada concorrente com 409 e não cria execução duplicada', async () => {
+    mockarPaginaUnica([clienteAlfa(201)]);
+
+    const [primeira, segunda] = await Promise.all([
+      request(app.getHttpServer()).post('/integracoes/alfa/execucoes'),
+      request(app.getHttpServer()).post('/integracoes/alfa/execucoes'),
+    ]);
+
+    const situacoes = [primeira.status, segunda.status].sort();
+    expect(situacoes).toEqual([202, 409]);
+
+    const idConcluida = primeira.status === 202 ? primeira.body.id : segunda.body.id;
+    await aguardarConclusao(app, idConcluida);
+  });
+});
