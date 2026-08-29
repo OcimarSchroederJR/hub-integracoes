@@ -13,6 +13,7 @@ export const envSchema = z.object({
   AWS_ENDPOINT: z.string().url().optional(),
   AWS_REGION: z.string().min(1).default('us-east-1'),
   S3_BUCKET_RAW: z.string().min(1).default('hub-raw-payloads'),
+  DYNAMO_TABLE_EVENTOS: z.string().min(1).default('hub-eventos'),
   FILA_CONCORRENCIA_NORMALIZACAO: z.coerce.number().int().positive().default(10),
   FILA_TENTATIVAS_MAXIMAS: z.coerce.number().int().positive().default(5),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
