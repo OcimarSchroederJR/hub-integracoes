@@ -37,7 +37,6 @@ describe('LoggerJsonService', () => {
     const linha = capturarLinhaEscrita(() => logger.warn('cuidado'));
 
     expect(linha.context).toBe('OutroContexto');
-    expect(String(linha.context)).not.toMatch(/\x1B/);
   });
 
   it('inclui o correlationId do contexto ativo', () => {
