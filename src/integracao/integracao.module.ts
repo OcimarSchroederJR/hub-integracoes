@@ -8,6 +8,7 @@ import { ColetaProcessor } from './filas/coleta.processor';
 import { NormalizacaoProcessor } from './filas/normalizacao.processor';
 import { EnvioProcessor } from './filas/envio.processor';
 import { AvaliadorConclusaoService } from './filas/avaliador-conclusao.service';
+import { FilaMetricsService } from './filas/fila-metrics.service';
 import { ExecucaoService } from './execucao.service';
 import { ReprocessamentoService } from './reprocessamento.service';
 
@@ -44,6 +45,7 @@ const OPCOES_PADRAO_JOB = {
     NormalizacaoProcessor,
     EnvioProcessor,
     AvaliadorConclusaoService,
+    FilaMetricsService,
     ExecucaoService,
     ReprocessamentoService,
   ],
