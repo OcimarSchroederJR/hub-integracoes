@@ -1,5 +1,7 @@
 # Hub de Integrações com Parceiros
 
+[![CI](https://github.com/OcimarSchroederJR/hub-integracoes/actions/workflows/ci.yml/badge.svg)](https://github.com/OcimarSchroederJR/hub-integracoes/actions/workflows/ci.yml)
+
 Serviço backend que recebe carteiras de cobrança de parceiros com formatos e protocolos distintos, normaliza os dados em um modelo canônico único e processa cada registro de forma assíncrona, com garantia de idempotência e recuperação de falhas.
 
 `NestJS` · `BullMQ` · `MySQL` · `DynamoDB` · `AWS` · `Docker`
@@ -30,8 +32,8 @@ Escrever um importador para cada parceiro funciona com dois. Com doze, vira doze
 Em desenvolvimento, seguindo o roadmap em fases de [docs/REQUISITOS_HUB_INTEGRACOES.md](docs/REQUISITOS_HUB_INTEGRACOES.md). Esta seção é atualizada a cada marco concluído.
 
 - [x] Fase 1 — esqueleto: NestJS, docker compose, mock Alfa sem falhas, adaptador Alfa, fila de normalização, endpoints básicos. Marco verificado: uma chamada importa os 500 registros da carteira mock e o banco reflete os dados corretamente, com a mesma importação repetida três vezes seguidas mantendo a contagem de dívidas constante.
-- [ ] Fase 2 — idempotência sob falha simulada, validação com rejeição, retry e fila de mortos, adaptador Beta, testes de integração
-- [ ] Fase 3 — S3, DynamoDB, métricas Prometheus e Grafana, CI, deploy
+- [x] Fase 2 — mock Alfa com 429/500/latência/dado inválido de verdade, adaptador Beta (CSV, latin-1, vírgula decimal, data brasileira), fila de mortos, reprocessamento manual, envio de atualização nos dois formatos, testes de integração com MySQL e Redis reais em CI. Marco verificado: a mesma carteira importada três vezes não duplica dívida, um lote com registro defeituoso rejeita só ele, e duas chamadas simultâneas de disparo não criam execução duplicada — os três com teste automatizado rodando de verdade no pipeline, não só localmente.
+- [ ] Fase 3 — S3, DynamoDB, métricas Prometheus e Grafana, deploy
 
 ---
 
@@ -50,7 +52,16 @@ Dispare uma importação e acompanhe:
 
 ```bash
 curl -X POST http://localhost:3000/integracoes/alfa/execucoes
+# ou: curl -X POST http://localhost:3000/integracoes/beta/execucoes
 curl http://localhost:3000/execucoes/{execucaoId}
+curl "http://localhost:3000/execucoes/{execucaoId}/registros?situacao=REJEITADO"
+```
+
+Se um registro ficar `FALHA` (esgotou as tentativas) ou `REJEITADO`, reprocesse com o payload bruto já arquivado, sem nova chamada ao parceiro:
+
+```bash
+curl -X POST http://localhost:3000/execucoes/{execucaoId}/reprocessar
+curl -X POST http://localhost:3000/registros/{registroId}/reprocessar
 ```
 
 Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. (Fase 3.)
@@ -59,15 +70,17 @@ Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. (Fa
 
 ## O que observar enquanto roda
 
-O mock dos parceiros falha de propósito, a partir da Fase 2. Ele devolve 429 acima de 60 requisições por minuto, 500 em cerca de 5 por cento das chamadas, latência aleatória de até 3 segundos e cerca de 5 por cento dos registros com defeito de dado. Um importador ingênuo quebra nesse cenário. O comportamento esperado aqui é outro.
+O mock dos parceiros falha de propósito. O Alfa devolve 429 acima de 60 requisições por minuto, 500 em cerca de 5 por cento das chamadas, latência aleatória de até 3 segundos e cerca de 10 por cento dos clientes com defeito de dado (documento inválido ou sem nenhum contrato). O Beta entrega um CSV com campo obrigatório vazio, data 31/02, valor não numérico e uma linha duplicada. Um importador ingênuo quebra nesse cenário. O comportamento esperado aqui é outro.
 
 O limitador da fila de coleta impede que o 429 aconteça, mesmo com a carteira sendo puxada o mais rápido possível.
 
-O 500 do parceiro é retentado com backoff exponencial e a trilha de eventos registra cada tentativa.
+O 500 do parceiro é retentado com backoff exponencial. Se as tentativas se esgotarem, o registro vira `FALHA` com o payload bruto preservado, pronto para `POST /registros/{id}/reprocessar` sem nova chamada ao parceiro. Uma página de coleta que esgota as tentativas deixa a execução presa em `PROCESSANDO` — o [runbook](docs/RUNBOOK.md) descreve como diagnosticar e recuperar manualmente; não há reenfileiramento automático ainda.
 
-O registro com CPF inválido é rejeitado sozinho, com motivo legível, e os outros seguem sendo processados.
+O registro com documento inválido é rejeitado sozinho, com motivo legível, e os outros seguem sendo processados.
 
-Rodar a mesma importação três vezes mantém a contagem de dívidas constante, porque a chave de idempotência tem restrição única no banco.
+Rodar a mesma importação três vezes mantém a contagem de dívidas constante, porque a chave de idempotência tem restrição única no banco. Duas chamadas simultâneas de disparo para o mesmo parceiro também não criam execução duplicada, pela mesma razão: a trava é uma restrição única (`ExecucaoAtiva.parceiroId`), não uma consulta seguida de inserção.
+
+Quando a situação de uma dívida muda entre duas importações, o hub enfileira o envio da atualização ao parceiro de origem no formato que ele espera — `POST` para o Alfa, webhook para o Beta — sem que o domínio saiba dessa diferença.
 
 O painel mostra profundidade de fila, taxa de rejeição por parceiro e latência do parceiro durante tudo isso. (Fase 3.)
 
@@ -100,6 +113,10 @@ O fluxo de saída não tem confirmação de entrega. Se o parceiro aceita o `POS
 A trilha de eventos em DynamoDB não tem política de expiração. Em volume real, cresce indefinidamente e precisaria de TTL.
 
 O reprocessamento em massa não tem limite de taxa próprio. Reprocessar uma execução de 100 mil registros enfileira tudo de uma vez e pode pressionar o parceiro.
+
+Uma página de coleta que esgota as cinco tentativas de retry não tem recuperação automática: a execução fica presa em `PROCESSANDO` até alguém reenfileirar manualmente o job com o cursor da última página bem-sucedida, como o [runbook](docs/RUNBOOK.md) descreve. Isso foi encontrado testando o mock com falha simulada, não é hipotético.
+
+Os testes de integração (`npm run test:e2e`) sobem os próprios containers de MySQL e Redis via `dockerode`, direto, sem a biblioteca `testcontainers`: ela tem uma incompatibilidade conhecida com o Docker Desktop no Windows por named pipe (falha em "create container" mesmo com o container auxiliar de limpeza desabilitado). Rodam localmente em Linux/macOS e no [CI](.github/workflows/ci.yml).
 
 ---
 
