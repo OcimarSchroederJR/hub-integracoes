@@ -4,7 +4,7 @@
 
 Serviço backend que recebe carteiras de cobrança de parceiros com formatos e protocolos distintos, normaliza os dados em um modelo canônico único e processa cada registro de forma assíncrona, com garantia de idempotência e recuperação de falhas.
 
-`NestJS` · `BullMQ` · `MySQL` · `DynamoDB` · `AWS` · `Docker`
+`NestJS` · `BullMQ` · `MySQL` · `DynamoDB` · `AWS` · `Prometheus` · `Grafana` · `Docker`
 
 ---
 
@@ -33,7 +33,7 @@ Em desenvolvimento, seguindo o roadmap em fases de [docs/REQUISITOS_HUB_INTEGRAC
 
 - [x] Fase 1 — esqueleto: NestJS, docker compose, mock Alfa sem falhas, adaptador Alfa, fila de normalização, endpoints básicos. Marco verificado: uma chamada importa os 500 registros da carteira mock e o banco reflete os dados corretamente, com a mesma importação repetida três vezes seguidas mantendo a contagem de dívidas constante.
 - [x] Fase 2 — mock Alfa com 429/500/latência/dado inválido de verdade, adaptador Beta (CSV, latin-1, vírgula decimal, data brasileira), fila de mortos, reprocessamento manual, envio de atualização nos dois formatos, testes de integração com MySQL e Redis reais em CI. Marco verificado: a mesma carteira importada três vezes não duplica dívida, um lote com registro defeituoso rejeita só ele, e duas chamadas simultâneas de disparo não criam execução duplicada — os três com teste automatizado rodando de verdade no pipeline, não só localmente.
-- [ ] Fase 3 — em andamento. Feito: payload bruto de cada página arquivado em S3/LocalStack antes de qualquer transformação (RF02); trilha de eventos em DynamoDB por registro, com `correlationId` propagado de ponta a ponta e log estruturado em JSON (RF07, RNF06); `/health` verificando banco, fila e armazenamento. Falta: métricas Prometheus e Grafana, deploy.
+- [ ] Fase 3 — em andamento. Feito: payload bruto de cada página arquivado em S3/LocalStack antes de qualquer transformação (RF02); trilha de eventos em DynamoDB por registro, com `correlationId` propagado de ponta a ponta e log estruturado em JSON (RF07, RNF06); `/health` verificando banco, fila e armazenamento; `GET /metrics` em formato Prometheus e painel Grafana provisionado como código (RF12, RNF06). Falta: deploy.
 
 ---
 
@@ -70,7 +70,7 @@ Para reconstruir a história de um registro específico:
 curl http://localhost:3000/registros/{registroId}/eventos
 ```
 
-Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. (Fase 3.)
+Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. Métricas cruas em `curl http://localhost:3000/metrics`, formato Prometheus.
 
 ---
 
@@ -92,7 +92,7 @@ Cada página coletada é gravada íntegra em `raw/{parceiro}/{execucaoId}/{seque
 
 Cada transição de um registro — persistido, rejeitado, falhou, atualização enviada — grava um evento na trilha do DynamoDB, com o mesmo `correlationId` da execução que o gerou. `GET /registros/{id}/eventos` devolve a história completa daquele registro em ordem cronológica, sem tocar no MySQL. Todo log da aplicação sai em JSON com esse `correlationId`, então filtrar por ele nos logs e na trilha aponta para o mesmo evento visto de dois ângulos.
 
-O painel mostra profundidade de fila, taxa de rejeição por parceiro e latência do parceiro durante tudo isso. (Fase 3.)
+O painel Grafana ("Hub de Integrações", provisionado como código em [observabilidade/grafana](observabilidade/grafana)) mostra profundidade de cada fila, registros processados por parceiro e resultado, duração p95 de chamada externa e fila de mortos — as quatro métricas mínimas da RNF06, raspadas do Prometheus a cada 10s.
 
 ---
 
