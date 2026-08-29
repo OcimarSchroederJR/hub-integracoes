@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import * as http from 'http';
 import * as net from 'net';
 import Docker from 'dockerode';
 
@@ -7,9 +8,11 @@ const docker = new Docker();
 export interface AmbienteTeste {
   mysqlContainerId: string;
   redisContainerId: string;
+  localstackContainerId: string;
   databaseUrl: string;
   redisHost: string;
   redisPort: number;
+  awsEndpoint: string;
 }
 
 function aguardarPortaAberta(host: string, port: number, timeoutMs: number): Promise<void> {
@@ -33,6 +36,46 @@ function aguardarPortaAberta(host: string, port: number, timeoutMs: number): Pro
         return;
       }
       setTimeout(tentar, 500);
+    };
+    tentar();
+  });
+}
+
+function aguardarLocalstackPronto(port: number, timeoutMs: number): Promise<void> {
+  const inicio = Date.now();
+  return new Promise((resolve, reject) => {
+    const tentar = () => {
+      const requisicao = http.get(
+        { host: '127.0.0.1', port, path: '/_localstack/health', timeout: 1_000 },
+        (res) => {
+          let corpo = '';
+          res.on('data', (pedaco) => (corpo += pedaco));
+          res.on('end', () => {
+            try {
+              const status = JSON.parse(corpo).services?.s3;
+              if (status === 'available' || status === 'running') {
+                resolve();
+                return;
+              }
+            } catch {
+              // resposta ainda não é JSON válido; tenta de novo
+            }
+            proximaTentativa();
+          });
+        },
+      );
+      requisicao.on('error', proximaTentativa);
+      requisicao.on('timeout', () => {
+        requisicao.destroy();
+        proximaTentativa();
+      });
+    };
+    const proximaTentativa = () => {
+      if (Date.now() - inicio >= timeoutMs) {
+        reject(new Error(`LocalStack não ficou pronto em ${timeoutMs}ms`));
+        return;
+      }
+      setTimeout(tentar, 1_000);
     };
     tentar();
   });
@@ -89,7 +132,7 @@ async function aplicarMigrationsComRetry(databaseUrl: string, tentativas: number
 export async function subirAmbiente(): Promise<AmbienteTeste> {
   const sufixo = Math.random().toString(36).slice(2, 8);
 
-  const [mysql, redis] = await Promise.all([
+  const [mysql, redis, localstack] = await Promise.all([
     criarESubir('mysql:8.0', `hub-teste-mysql-${sufixo}`, {
       Env: ['MYSQL_ROOT_PASSWORD=root', 'MYSQL_DATABASE=hub_test', 'MYSQL_USER=hub', 'MYSQL_PASSWORD=hub'],
       ExposedPorts: { '3306/tcp': {} },
@@ -99,13 +142,26 @@ export async function subirAmbiente(): Promise<AmbienteTeste> {
       ExposedPorts: { '6379/tcp': {} },
       HostConfig: { PortBindings: { '6379/tcp': [{ HostPort: '0' }] }, AutoRemove: true },
     }),
+    criarESubir('localstack/localstack:3', `hub-teste-localstack-${sufixo}`, {
+      Env: ['SERVICES=s3', 'DEFAULT_REGION=us-east-1'],
+      ExposedPorts: { '4566/tcp': {} },
+      HostConfig: { PortBindings: { '4566/tcp': [{ HostPort: '0' }] }, AutoRemove: true },
+    }),
   ]);
 
-  const [mysqlInfo, redisInfo] = await Promise.all([mysql.inspect(), redis.inspect()]);
+  const [mysqlInfo, redisInfo, localstackInfo] = await Promise.all([
+    mysql.inspect(),
+    redis.inspect(),
+    localstack.inspect(),
+  ]);
   const mysqlPort = Number(mysqlInfo.NetworkSettings.Ports['3306/tcp'][0].HostPort);
   const redisPort = Number(redisInfo.NetworkSettings.Ports['6379/tcp'][0].HostPort);
+  const localstackPort = Number(localstackInfo.NetworkSettings.Ports['4566/tcp'][0].HostPort);
 
-  await aguardarPortaAberta('127.0.0.1', redisPort, 20_000);
+  await Promise.all([
+    aguardarPortaAberta('127.0.0.1', redisPort, 20_000),
+    aguardarLocalstackPronto(localstackPort, 60_000),
+  ]);
 
   const databaseUrl = `mysql://hub:hub@127.0.0.1:${mysqlPort}/hub_test`;
   await aplicarMigrationsComRetry(databaseUrl, 20);
@@ -113,9 +169,11 @@ export async function subirAmbiente(): Promise<AmbienteTeste> {
   return {
     mysqlContainerId: mysql.id,
     redisContainerId: redis.id,
+    localstackContainerId: localstack.id,
     databaseUrl,
     redisHost: '127.0.0.1',
     redisPort,
+    awsEndpoint: `http://127.0.0.1:${localstackPort}`,
   };
 }
 
@@ -127,6 +185,10 @@ export async function derrubarAmbiente(ambiente: AmbienteTeste): Promise<void> {
       .catch(() => undefined),
     docker
       .getContainer(ambiente.redisContainerId)
+      .stop()
+      .catch(() => undefined),
+    docker
+      .getContainer(ambiente.localstackContainerId)
       .stop()
       .catch(() => undefined),
   ]);

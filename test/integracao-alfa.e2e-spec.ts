@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import nock from 'nock';
 import request from 'supertest';
 import { AmbienteTeste, derrubarAmbiente, subirAmbiente } from './setup/containers';
@@ -57,7 +58,7 @@ async function aguardarConclusao(
   throw new Error(`Execução "${execucaoId}" não concluiu em ${timeoutMs}ms`);
 }
 
-describe('Importação do Parceiro Alfa (integração com MySQL e Redis reais)', () => {
+describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/LocalStack reais)', () => {
   let ambiente: AmbienteTeste;
   let app: INestApplication;
 
@@ -71,6 +72,9 @@ describe('Importação do Parceiro Alfa (integração com MySQL e Redis reais)',
     process.env.PARCEIRO_ALFA_TOKEN = 'token-de-teste';
     process.env.PARCEIRO_BETA_CSV_URL = 'http://beta-mock.test/carteira.csv';
     process.env.PARCEIRO_BETA_WEBHOOK_URL = 'http://beta-mock.test/webhook';
+    process.env.AWS_ENDPOINT = ambiente.awsEndpoint;
+    process.env.AWS_REGION = 'us-east-1';
+    process.env.S3_BUCKET_RAW = 'hub-raw-payloads-teste';
 
     const { AppModule } = await import('../src/app.module');
 
@@ -105,6 +109,28 @@ describe('Importação do Parceiro Alfa (integração com MySQL e Redis reais)',
 
     expect(registrosRejeitados.body).toHaveLength(1);
     expect(registrosRejeitados.body[0].motivoRejeicao).toMatch(/Documento inválido/);
+  });
+
+  it('arquiva o payload bruto da página em S3 antes de qualquer transformação (RF02)', async () => {
+    const itens = [clienteAlfa(301), clienteAlfa(302)];
+    mockarPaginaUnica(itens);
+
+    const disparo = await request(app.getHttpServer()).post('/integracoes/alfa/execucoes').expect(202);
+    await aguardarConclusao(app, disparo.body.id);
+
+    const s3 = new S3Client({
+      region: 'us-east-1',
+      endpoint: ambiente.awsEndpoint,
+      forcePathStyle: true,
+      credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+    });
+    const objeto = await s3.send(
+      new GetObjectCommand({ Bucket: 'hub-raw-payloads-teste', Key: `raw/alfa/${disparo.body.id}/0.json` }),
+    );
+    const conteudo = JSON.parse(await objeto.Body!.transformToString());
+
+    expect(conteudo.data).toHaveLength(2);
+    expect(conteudo.data[0].externalId).toBe('ALF-301');
   });
 
   it('reprocessar a mesma carteira não duplica dívidas (ADR 0002)', async () => {
