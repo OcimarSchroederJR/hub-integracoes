@@ -108,7 +108,7 @@ As escolhas relevantes estão registradas como ADR, com contexto, alternativas d
 | [0004](docs/adr/0004-mysql-e-dynamodb.md) | MySQL para o estado, DynamoDB para a trilha de eventos |
 | [0005](docs/adr/0005-erro-de-dado-vs-erro-de-infra.md) | Erro de dado rejeita, erro de infraestrutura retenta |
 
-Complementos: [contrato de normalização](docs/CONTRATO_DE_NORMALIZACAO.md), [runbook operacional](docs/RUNBOOK.md), [benchmark](docs/BENCHMARK.md).
+Complementos: [contrato de normalização](docs/CONTRATO_DE_NORMALIZACAO.md), [runbook operacional](docs/RUNBOOK.md), [benchmark](docs/BENCHMARK.md), [uso de IA no desenvolvimento](docs/USO_DE_IA.md).
 
 ---
 
