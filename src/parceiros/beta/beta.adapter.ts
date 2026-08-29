@@ -4,6 +4,7 @@ import axios, { AxiosInstance } from 'axios';
 import { EnvConfig } from '../../config/env.schema';
 import { AtualizacaoSituacao } from '../../dominio/entidades/registro-canonico';
 import { ParceiroAdapter, PaginaColetada } from '../../dominio/portas/parceiro-adapter.port';
+import { MetricsService } from '../../infra/observabilidade/metrics.service';
 import { linhaBetaSchema } from './beta.dto';
 import { normalizarBeta, traduzirSituacaoParaBeta } from './beta.mapper';
 
@@ -37,8 +38,20 @@ export class BetaAdapter implements ParceiroAdapter {
   private readonly http: AxiosInstance;
   private readonly logger = new Logger(BetaAdapter.name);
 
-  constructor(private readonly config: ConfigService<EnvConfig, true>) {
+  constructor(
+    private readonly config: ConfigService<EnvConfig, true>,
+    private readonly metrics: MetricsService,
+  ) {
     this.http = axios.create({ timeout: 10_000 });
+  }
+
+  private async medir<T>(operacao: string, chamada: () => Promise<T>): Promise<T> {
+    const inicio = Date.now();
+    try {
+      return await chamada();
+    } finally {
+      this.metrics.duracaoChamadaExterna.observe({ parceiro: this.codigo, operacao }, Date.now() - inicio);
+    }
   }
 
   async coletarPagina(cursor: string | null): Promise<PaginaColetada> {
@@ -47,7 +60,9 @@ export class BetaAdapter implements ParceiroAdapter {
     }
 
     const url = this.config.get('PARCEIRO_BETA_CSV_URL', { infer: true });
-    const resposta = await this.http.get<ArrayBuffer>(url, { responseType: 'arraybuffer' });
+    const resposta = await this.medir('coletar', () =>
+      this.http.get<ArrayBuffer>(url, { responseType: 'arraybuffer' }),
+    );
     const bruto = Buffer.from(resposta.data);
     const texto = bruto.toString('latin1');
 
@@ -72,10 +87,12 @@ export class BetaAdapter implements ParceiroAdapter {
 
   async enviarAtualizacao(atualizacao: AtualizacaoSituacao): Promise<void> {
     const url = this.config.get('PARCEIRO_BETA_WEBHOOK_URL', { infer: true });
-    await this.http.post(url, {
-      numContrato: atualizacao.numeroContrato,
-      situacao: traduzirSituacaoParaBeta(atualizacao.novaSituacao),
-      dataEvento: formatarDataEventoBrasileira(atualizacao.ocorridoEm),
-    });
+    await this.medir('enviar-atualizacao', () =>
+      this.http.post(url, {
+        numContrato: atualizacao.numeroContrato,
+        situacao: traduzirSituacaoParaBeta(atualizacao.novaSituacao),
+        dataEvento: formatarDataEventoBrasileira(atualizacao.ocorridoEm),
+      }),
+    );
   }
 }

@@ -4,6 +4,7 @@ import axios, { AxiosInstance } from 'axios';
 import { EnvConfig } from '../../config/env.schema';
 import { AtualizacaoSituacao } from '../../dominio/entidades/registro-canonico';
 import { ParceiroAdapter, PaginaColetada } from '../../dominio/portas/parceiro-adapter.port';
+import { MetricsService } from '../../infra/observabilidade/metrics.service';
 import { ItemAlfaAchatado, paginaAlfaSchema, itemAlfaSchema } from './alfa.dto';
 import { normalizarAlfa, traduzirSituacaoParaAlfa } from './alfa.mapper';
 
@@ -14,7 +15,10 @@ export class AlfaAdapter implements ParceiroAdapter {
   private readonly http: AxiosInstance;
   private readonly logger = new Logger(AlfaAdapter.name);
 
-  constructor(config: ConfigService<EnvConfig, true>) {
+  constructor(
+    config: ConfigService<EnvConfig, true>,
+    private readonly metrics: MetricsService,
+  ) {
     this.http = axios.create({
       baseURL: config.get('PARCEIRO_ALFA_BASE_URL', { infer: true }),
       headers: { Authorization: `Bearer ${config.get('PARCEIRO_ALFA_TOKEN', { infer: true })}` },
@@ -22,10 +26,19 @@ export class AlfaAdapter implements ParceiroAdapter {
     });
   }
 
+  private async medir<T>(operacao: string, chamada: () => Promise<T>): Promise<T> {
+    const inicio = Date.now();
+    try {
+      return await chamada();
+    } finally {
+      this.metrics.duracaoChamadaExterna.observe({ parceiro: this.codigo, operacao }, Date.now() - inicio);
+    }
+  }
+
   async coletarPagina(cursor: string | null): Promise<PaginaColetada> {
-    const resposta = await this.http.get('/v1/portfolio', {
-      params: { cursor: cursor ?? undefined, limit: 100 },
-    });
+    const resposta = await this.medir('coletar', () =>
+      this.http.get('/v1/portfolio', { params: { cursor: cursor ?? undefined, limit: 100 } }),
+    );
 
     const bruto = Buffer.from(JSON.stringify(resposta.data), 'utf-8');
     const pagina = paginaAlfaSchema.parse(resposta.data);
@@ -71,10 +84,12 @@ export class AlfaAdapter implements ParceiroAdapter {
   }
 
   async enviarAtualizacao(atualizacao: AtualizacaoSituacao): Promise<void> {
-    await this.http.post(`/v1/portfolio/${atualizacao.identificadorExterno}/status`, {
-      contractNumber: atualizacao.numeroContrato,
-      newStatus: traduzirSituacaoParaAlfa(atualizacao.novaSituacao),
-      occurredAt: atualizacao.ocorridoEm.toISOString(),
-    });
+    await this.medir('enviar-atualizacao', () =>
+      this.http.post(`/v1/portfolio/${atualizacao.identificadorExterno}/status`, {
+        contractNumber: atualizacao.numeroContrato,
+        newStatus: traduzirSituacaoParaAlfa(atualizacao.novaSituacao),
+        occurredAt: atualizacao.ocorridoEm.toISOString(),
+      }),
+    );
   }
 }
