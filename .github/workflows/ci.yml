@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint:ci
+      - run: npm test -- --ci
+      - run: npm run build
+      - run: npm run test:e2e
+        env:
+          PARCEIRO_ALFA_TOKEN: token-de-ci
+
+  mock-parceiros:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mock-parceiros/package-lock.json
+
+      - run: npm ci
+        working-directory: mock-parceiros
+      - run: npx tsc --noEmit
+        working-directory: mock-parceiros
+      - run: npm run build
+        working-directory: mock-parceiros
