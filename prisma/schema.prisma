@@ -24,6 +24,15 @@ enum SituacaoExecucao {
   FALHA
 }
 
+/// Trava de "uma execução ativa por parceiro" (RF01). A linha existe
+/// enquanto há uma ExecucaoIntegracao em PENDENTE ou PROCESSANDO para o
+/// parceiro; criá-la é atômico via restrição única, ao contrário de
+/// "consultar depois inserir" -- o mesmo raciocínio do ADR 0002, aplicado
+/// aqui porque o disparo de execução tinha exatamente essa lacuna.
+model ExecucaoAtiva {
+  parceiroId String @id
+}
+
 model ExecucaoIntegracao {
   id                String            @id @default(uuid())
   parceiroId        String

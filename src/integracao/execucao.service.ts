@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { SituacaoRegistro } from '@prisma/client';
+import { Prisma, SituacaoRegistro } from '@prisma/client';
 import { PrismaService } from '../infra/prisma/prisma.service';
 import { RegistroAdaptadores, ParceiroDesconhecidoError } from '../parceiros/registro-adaptadores';
 import { FILA_COLETA, JobColeta } from './filas/constantes';
@@ -31,13 +31,15 @@ export class ExecucaoService {
       create: { codigo: parceiroCodigo, nome: parceiroCodigo },
     });
 
-    const execucaoEmAndamento = await this.prisma.execucaoIntegracao.findFirst({
-      where: { parceiroId: parceiro.id, situacao: { in: ['PENDENTE', 'PROCESSANDO'] } },
-    });
-    if (execucaoEmAndamento) {
-      throw new ConflictException(
-        `Já existe uma execução em andamento para o parceiro "${parceiroCodigo}" (id ${execucaoEmAndamento.id})`,
-      );
+    try {
+      await this.prisma.execucaoAtiva.create({ data: { parceiroId: parceiro.id } });
+    } catch (erro) {
+      if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === 'P2002') {
+        throw new ConflictException(
+          `Já existe uma execução em andamento para o parceiro "${parceiroCodigo}"`,
+        );
+      }
+      throw erro;
     }
 
     const execucao = await this.prisma.execucaoIntegracao.create({

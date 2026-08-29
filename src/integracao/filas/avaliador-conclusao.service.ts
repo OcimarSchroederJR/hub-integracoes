@@ -19,13 +19,16 @@ export class AvaliadorConclusaoService {
       return;
     }
 
-    await this.prisma.execucaoIntegracao.update({
-      where: { id: execucaoId },
-      data: {
-        situacao: 'CONCLUIDA',
-        concluidaEm: new Date(),
-        duracaoMs: Date.now() - execucao.iniciadaEm.getTime(),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.execucaoIntegracao.update({
+        where: { id: execucaoId },
+        data: {
+          situacao: 'CONCLUIDA',
+          concluidaEm: new Date(),
+          duracaoMs: Date.now() - execucao.iniciadaEm.getTime(),
+        },
+      }),
+      this.prisma.execucaoAtiva.deleteMany({ where: { parceiroId: execucao.parceiroId } }),
+    ]);
   }
 }

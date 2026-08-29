@@ -47,6 +47,11 @@ export class ReprocessamentoService {
           totalRejeitados: { decrement: totalRejeitados },
         },
       }),
+      this.prisma.execucaoAtiva.upsert({
+        where: { parceiroId: execucao.parceiroId },
+        update: {},
+        create: { parceiroId: execucao.parceiroId },
+      }),
     ]);
 
     await this.enfileirar(
@@ -83,6 +88,11 @@ export class ReprocessamentoService {
           ...(registro.situacao === 'FALHA' ? { totalFalhas: { decrement: 1 } } : {}),
           ...(registro.situacao === 'REJEITADO' ? { totalRejeitados: { decrement: 1 } } : {}),
         },
+      }),
+      this.prisma.execucaoAtiva.upsert({
+        where: { parceiroId: registro.execucao.parceiroId },
+        update: {},
+        create: { parceiroId: registro.execucao.parceiroId },
       }),
     ]);
 
