@@ -8,6 +8,7 @@ export interface JobColeta {
   execucaoId: string;
   parceiroCodigo: string;
   cursor: string | null;
+  sequencial: number;
 }
 
 export interface JobNormalizacao {

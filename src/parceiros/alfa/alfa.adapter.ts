@@ -63,7 +63,7 @@ export class AlfaAdapter implements ParceiroAdapter {
       }
     }
 
-    return { itens, proximoCursor: pagina.hasMore ? pagina.nextCursor : null, bruto };
+    return { itens, proximoCursor: pagina.hasMore ? pagina.nextCursor : null, bruto, extensao: 'json' };
   }
 
   normalizar(itemBruto: unknown) {

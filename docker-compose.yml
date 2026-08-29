@@ -42,5 +42,22 @@ services:
       ALFA_PROBABILIDADE_FALHA_500: ${ALFA_PROBABILIDADE_FALHA_500:-0.05}
       BETA_TAMANHO_CARTEIRA: ${BETA_TAMANHO_CARTEIRA:-200}
 
+  localstack:
+    image: localstack/localstack:3
+    restart: unless-stopped
+    ports:
+      - "${LOCALSTACK_HOST_PORT:-4566}:4566"
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
 volumes:
   mysql_data:
+  localstack_data:

@@ -50,6 +50,7 @@ export class ExecucaoService {
       execucaoId: execucao.id,
       parceiroCodigo,
       cursor: null,
+      sequencial: 0,
     } satisfies JobColeta);
 
     return { id: execucao.id, correlationId: execucao.correlationId, situacao: execucao.situacao };

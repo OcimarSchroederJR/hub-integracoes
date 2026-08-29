@@ -4,6 +4,7 @@ export interface PaginaColetada {
   itens: unknown[];
   proximoCursor: string | null;
   bruto: Buffer;
+  extensao: string;
 }
 
 export interface ParceiroAdapter {

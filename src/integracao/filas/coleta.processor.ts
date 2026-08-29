@@ -1,8 +1,9 @@
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
+import { ArquivoBruto, ARQUIVO_BRUTO, chaveArquivoBruto } from '../../dominio/portas/arquivo-bruto.port';
 import { FILA_COLETA, FILA_NORMALIZACAO, JobColeta, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
 
@@ -19,6 +20,7 @@ export class ColetaProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly registroAdaptadores: RegistroAdaptadores,
     private readonly avaliadorConclusao: AvaliadorConclusaoService,
+    @Inject(ARQUIVO_BRUTO) private readonly arquivoBruto: ArquivoBruto,
     @InjectQueue(FILA_COLETA) private readonly filaColeta: Queue<JobColeta>,
     @InjectQueue(FILA_NORMALIZACAO) private readonly filaNormalizacao: Queue<JobNormalizacao>,
   ) {
@@ -26,7 +28,7 @@ export class ColetaProcessor extends WorkerHost {
   }
 
   async process(job: Job<JobColeta>): Promise<void> {
-    const { execucaoId, parceiroCodigo, cursor } = job.data;
+    const { execucaoId, parceiroCodigo, cursor, sequencial } = job.data;
     const adaptador = this.registroAdaptadores.obter(parceiroCodigo);
 
     await this.prisma.execucaoIntegracao.updateMany({
@@ -37,6 +39,11 @@ export class ColetaProcessor extends WorkerHost {
     const pagina = await adaptador.coletarPagina(cursor);
     this.logger.log(
       `Página coletada de "${parceiroCodigo}": ${pagina.itens.length} itens, cursor="${cursor}"`,
+    );
+
+    await this.arquivoBruto.arquivar(
+      chaveArquivoBruto(parceiroCodigo, execucaoId, sequencial, pagina.extensao),
+      pagina.bruto,
     );
 
     await this.prisma.execucaoIntegracao.update({
@@ -57,6 +64,7 @@ export class ColetaProcessor extends WorkerHost {
         execucaoId,
         parceiroCodigo,
         cursor: pagina.proximoCursor,
+        sequencial: sequencial + 1,
       } satisfies JobColeta);
       return;
     }

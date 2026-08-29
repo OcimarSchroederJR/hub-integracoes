@@ -43,7 +43,7 @@ export class BetaAdapter implements ParceiroAdapter {
 
   async coletarPagina(cursor: string | null): Promise<PaginaColetada> {
     if (cursor) {
-      return { itens: [], proximoCursor: null, bruto: Buffer.alloc(0) };
+      return { itens: [], proximoCursor: null, bruto: Buffer.alloc(0), extensao: 'csv' };
     }
 
     const url = this.config.get('PARCEIRO_BETA_CSV_URL', { infer: true });
@@ -63,7 +63,7 @@ export class BetaAdapter implements ParceiroAdapter {
       itens.push(validacao.data);
     }
 
-    return { itens, proximoCursor: null, bruto };
+    return { itens, proximoCursor: null, bruto, extensao: 'csv' };
   }
 
   normalizar(itemBruto: unknown) {

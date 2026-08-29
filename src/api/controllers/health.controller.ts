@@ -3,20 +3,26 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { EnvConfig } from '../../config/env.schema';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { S3ArquivoBrutoService } from '../../infra/s3/s3-arquivo-bruto.service';
 
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<EnvConfig, true>,
+    private readonly arquivoBruto: S3ArquivoBrutoService,
   ) {}
 
   @Get()
   async verificar() {
-    const [banco, redis] = await Promise.all([this.verificarBanco(), this.verificarRedis()]);
+    const [banco, redis, armazenamento] = await Promise.all([
+      this.verificarBanco(),
+      this.verificarRedis(),
+      this.verificarArmazenamento(),
+    ]);
 
-    const saudavel = banco.ok && redis.ok;
-    const resultado = { status: saudavel ? 'ok' : 'degradado', banco, redis };
+    const saudavel = banco.ok && redis.ok && armazenamento.ok;
+    const resultado = { status: saudavel ? 'ok' : 'degradado', banco, redis, armazenamento };
 
     if (!saudavel) {
       throw new HttpException(resultado, HttpStatus.SERVICE_UNAVAILABLE);
@@ -48,6 +54,15 @@ export class HealthController {
       return { ok: false, erro: erro instanceof Error ? erro.message : String(erro) };
     } finally {
       client.disconnect();
+    }
+  }
+
+  private async verificarArmazenamento(): Promise<{ ok: boolean; erro?: string }> {
+    try {
+      const ok = await this.arquivoBruto.verificarSaude();
+      return ok ? { ok: true } : { ok: false, erro: 'falha ao gravar objeto de teste' };
+    } catch (erro) {
+      return { ok: false, erro: erro instanceof Error ? erro.message : String(erro) };
     }
   }
 }
