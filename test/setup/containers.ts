@@ -52,8 +52,9 @@ function aguardarLocalstackPronto(port: number, timeoutMs: number): Promise<void
           res.on('data', (pedaco) => (corpo += pedaco));
           res.on('end', () => {
             try {
-              const status = JSON.parse(corpo).services?.s3;
-              if (status === 'available' || status === 'running') {
+              const pronto = (status: unknown) => status === 'available' || status === 'running';
+              const servicos = JSON.parse(corpo).services ?? {};
+              if (pronto(servicos.s3) && pronto(servicos.dynamodb)) {
                 resolve();
                 return;
               }
@@ -143,7 +144,7 @@ export async function subirAmbiente(): Promise<AmbienteTeste> {
       HostConfig: { PortBindings: { '6379/tcp': [{ HostPort: '0' }] }, AutoRemove: true },
     }),
     criarESubir('localstack/localstack:3', `hub-teste-localstack-${sufixo}`, {
-      Env: ['SERVICES=s3', 'DEFAULT_REGION=us-east-1'],
+      Env: ['SERVICES=s3,dynamodb', 'DEFAULT_REGION=us-east-1'],
       ExposedPorts: { '4566/tcp': {} },
       HostConfig: { PortBindings: { '4566/tcp': [{ HostPort: '0' }] }, AutoRemove: true },
     }),

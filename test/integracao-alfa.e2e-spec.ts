@@ -75,6 +75,7 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
     process.env.AWS_ENDPOINT = ambiente.awsEndpoint;
     process.env.AWS_REGION = 'us-east-1';
     process.env.S3_BUCKET_RAW = 'hub-raw-payloads-teste';
+    process.env.DYNAMO_TABLE_EVENTOS = 'hub-eventos-teste';
 
     const { AppModule } = await import('../src/app.module');
 
@@ -131,6 +132,30 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
 
     expect(conteudo.data).toHaveLength(2);
     expect(conteudo.data[0].externalId).toBe('ALF-301');
+  });
+
+  it('registra a trilha de eventos do registro persistido e do rejeitado (RF07)', async () => {
+    mockarPaginaUnica([clienteAlfa(401), clienteAlfa(402, { taxId: '00000000000' })]);
+
+    const disparo = await request(app.getHttpServer()).post('/integracoes/alfa/execucoes').expect(202);
+    await aguardarConclusao(app, disparo.body.id);
+
+    const registros = await request(app.getHttpServer()).get(`/execucoes/${disparo.body.id}/registros`);
+    const persistido = registros.body.find((r: { situacao: string }) => r.situacao === 'PERSISTIDO');
+    const rejeitado = registros.body.find((r: { situacao: string }) => r.situacao === 'REJEITADO');
+
+    const eventosPersistido = await request(app.getHttpServer()).get(`/registros/${persistido.id}/eventos`);
+    expect(eventosPersistido.body).toHaveLength(1);
+    expect(eventosPersistido.body[0].tipo).toBe('REGISTRO_PERSISTIDO');
+    expect(eventosPersistido.body[0].execucaoId).toBe(disparo.body.id);
+    expect(eventosPersistido.body[0].correlationId).toBe(disparo.body.correlationId);
+
+    const eventosRejeitado = await request(app.getHttpServer()).get(`/registros/${rejeitado.id}/eventos`);
+    expect(eventosRejeitado.body).toHaveLength(1);
+    expect(eventosRejeitado.body[0].tipo).toBe('REGISTRO_REJEITADO');
+    expect(eventosRejeitado.body[0].detalhe.motivo).toMatch(/Documento inválido/);
+
+    await request(app.getHttpServer()).get('/registros/id-inexistente/eventos').expect(404);
   });
 
   it('reprocessar a mesma carteira não duplica dívidas (ADR 0002)', async () => {
