@@ -86,7 +86,32 @@ model Devedor {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  dividas Divida[]
+  dividas       Divida[]
+  sobreposicoes SobreposicaoDetectada[]
+}
+
+/// Duas dívidas ativas do mesmo devedor, vindas de parceiros
+/// diferentes, com valor parecido -- não decide nada (motor de
+/// negociação automatizada está fora de escopo), só sinaliza pra
+/// revisão manual. dividaAId é sempre o menor dos dois ids (ordem
+/// lexicográfica), pra a mesma dupla nunca ser detectada duas vezes
+/// em ordem trocada.
+model SobreposicaoDetectada {
+  id               String   @id @default(uuid())
+  devedorId        String
+  devedor          Devedor  @relation(fields: [devedorId], references: [id])
+  dividaAId        String   @db.VarChar(191)
+  dividaBId        String   @db.VarChar(191)
+  parceiroACodigo  String   @db.VarChar(32)
+  parceiroBCodigo  String   @db.VarChar(32)
+  numeroContratoA  String   @db.VarChar(191)
+  numeroContratoB  String   @db.VarChar(191)
+  valorAtualizadoA Int
+  valorAtualizadoB Int
+  detectadoEm      DateTime @default(now())
+
+  @@unique([dividaAId, dividaBId])
+  @@index([devedorId])
 }
 
 enum SituacaoDivida {

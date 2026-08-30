@@ -13,6 +13,7 @@ import { AvaliadorConclusaoService } from './filas/avaliador-conclusao.service';
 import { FilaMetricsService } from './filas/fila-metrics.service';
 import { ExecucaoService } from './execucao.service';
 import { ReprocessamentoService } from './reprocessamento.service';
+import { SobreposicaoService } from './sobreposicao.service';
 
 const TENTATIVAS_MAXIMAS = Number(process.env.FILA_TENTATIVAS_MAXIMAS) || 5;
 
@@ -53,7 +54,8 @@ const OPCOES_PADRAO_JOB = {
     FilaMetricsService,
     ExecucaoService,
     ReprocessamentoService,
+    SobreposicaoService,
   ],
-  exports: [ExecucaoService, ReprocessamentoService],
+  exports: [ExecucaoService, ReprocessamentoService, SobreposicaoService],
 })
 export class IntegracaoModule {}

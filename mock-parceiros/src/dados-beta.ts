@@ -65,10 +65,14 @@ export function gerarCarteiraBetaCsv(quantidade: number, comFalhas: boolean): st
   let ultimaLinhaValida = '';
 
   for (let i = 0; i < quantidade; i++) {
-    const cpf = gerarCpf(200_000_000 + i * 11);
+    // i === 0 reaproveita de propósito a mesma semente do cliente 0 do Alfa
+    // (ver dados.ts), com um valor atualizado próximo, pra existir uma
+    // sobreposição real e detectável entre os dois parceiros nos dados
+    // gerados por padrão -- ver SobreposicaoService.
+    const cpf = i === 0 ? gerarCpf(100_000_000) : gerarCpf(200_000_000 + i * 11);
     const cpfFormatado = i % 2 === 0 ? formatarCpfComMascara(cpf) : cpf;
     const nome = NOMES[i % NOMES.length];
-    const original = 40_000 + ((i * 211) % 400_000);
+    const original = i === 0 ? 50_000 : 40_000 + ((i * 211) % 400_000);
     const atualizado = Math.round(original * 1.13);
     const numeroContrato = `CT-B${String(70_000 + i)}`;
     const telefone = `81${String(988_000_000 + i).slice(0, 9)}`;

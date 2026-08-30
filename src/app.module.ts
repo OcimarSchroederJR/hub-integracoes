@@ -10,6 +10,7 @@ import { IntegracaoModule } from './integracao/integracao.module';
 import { ExecucoesController } from './api/controllers/execucoes.controller';
 import { HealthController } from './api/controllers/health.controller';
 import { MetricsController } from './api/controllers/metrics.controller';
+import { DevedoresController } from './api/controllers/devedores.controller';
 
 @Module({
   imports: [
@@ -21,6 +22,6 @@ import { MetricsController } from './api/controllers/metrics.controller';
     ParceirosModule,
     IntegracaoModule,
   ],
-  controllers: [ExecucoesController, HealthController, MetricsController],
+  controllers: [ExecucoesController, HealthController, MetricsController, DevedoresController],
 })
 export class AppModule {}

@@ -11,6 +11,7 @@ import { MetricsService } from '../../infra/observabilidade/metrics.service';
 import { EventosOutboxService } from './eventos-outbox.service';
 import { FILA_ENVIO, FILA_NORMALIZACAO, JobEnvio, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
+import { SobreposicaoService } from '../sobreposicao.service';
 
 const CONCORRENCIA_NORMALIZACAO = Number(process.env.FILA_CONCORRENCIA_NORMALIZACAO) || 10;
 
@@ -30,6 +31,7 @@ export class NormalizacaoProcessor extends WorkerHost {
     private readonly registroAdaptadores: RegistroAdaptadores,
     private readonly avaliadorConclusao: AvaliadorConclusaoService,
     private readonly eventosOutbox: EventosOutboxService,
+    private readonly sobreposicao: SobreposicaoService,
     private readonly metrics: MetricsService,
     @InjectQueue(FILA_ENVIO) private readonly filaEnvio: Queue<JobEnvio>,
   ) {
@@ -196,6 +198,16 @@ export class NormalizacaoProcessor extends WorkerHost {
     });
 
     this.metrics.registrosProcessados.inc({ parceiro: parceiroCodigo, resultado: 'persistido' });
+
+    await this.sobreposicao.verificar({
+      id: divida.id,
+      devedorId: devedor.id,
+      parceiroId: parceiro.id,
+      parceiroCodigo,
+      numeroContrato: canonico.numeroContrato,
+      valorAtualizado: canonico.valorAtualizado,
+      situacao: canonico.situacao,
+    });
 
     if (dividaAnterior && dividaAnterior.situacao !== canonico.situacao) {
       await this.filaEnvio.add('enviar-atualizacao', {
