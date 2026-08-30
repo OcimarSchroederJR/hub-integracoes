@@ -1,4 +1,4 @@
-import { obterCreditoReal } from './dados-reais';
+import { obterCreditoReal, obterSituacaoDoCredito, SituacaoCredito } from './dados-reais';
 
 function calcularDigitosCpf(base9: string): string {
   const calcularD1 = () => {
@@ -51,7 +51,12 @@ const NOMES = [
   'CONCEIÇÃO SANTOS',
 ];
 
-const SITUACOES = ['EM ATRASO', 'EM NEGOCIACAO', 'QUITADO', 'CANCELADO'];
+const SITUACOES: Record<SituacaoCredito, string> = {
+  ATRASO: 'EM ATRASO',
+  NEGOCIACAO: 'EM NEGOCIACAO',
+  QUITADO: 'QUITADO',
+  CANCELADO: 'CANCELADO',
+};
 
 const CABECALHO =
   'CPF_CNPJ;NOME_CLIENTE;NUM_CONTRATO;VLR_ORIGINAL;VLR_ATUALIZADO;DT_VENCIMENTO;TELEFONE;SITUACAO';
@@ -77,11 +82,12 @@ export function gerarCarteiraBetaCsv(quantidade: number, comFalhas: boolean): st
     // Offset de 1500 pra não sortear exatamente os mesmos registros do
     // dataset que o Alfa usa nos mesmos índices (i === 0 é a exceção
     // proposital, ver acima).
-    const original = obterCreditoReal(i === 0 ? 0 : i + 1500).valorFaturaCentavos;
+    const indiceDataset = i === 0 ? 0 : i + 1500;
+    const original = obterCreditoReal(indiceDataset).valorFaturaCentavos;
     const atualizado = Math.round(original * 1.13);
     const numeroContrato = `CT-B${String(70_000 + i)}`;
     const telefone = `81${String(988_000_000 + i).slice(0, 9)}`;
-    const situacao = SITUACOES[i % SITUACOES.length];
+    const situacao = SITUACOES[obterSituacaoDoCredito(indiceDataset)];
 
     const campoNomeVazio = comFalhas && i % 25 === 5;
     const dataInvalida = comFalhas && i % 25 === 12;

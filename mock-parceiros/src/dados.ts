@@ -1,4 +1,4 @@
-import { obterCreditoReal } from './dados-reais';
+import { obterCreditoReal, obterSituacaoDoCredito, SituacaoCredito } from './dados-reais';
 
 function calcularDigitosCpf(base9: string): string {
   const calcular = (tamanho: number): number => {
@@ -46,7 +46,12 @@ const NOMES = [
   'Marcos Almeida',
 ];
 
-const STATUS = ['OVERDUE', 'IN_NEGOTIATION', 'SETTLED', 'CANCELED'];
+const STATUS: Record<SituacaoCredito, string> = {
+  ATRASO: 'OVERDUE',
+  NEGOCIACAO: 'IN_NEGOTIATION',
+  QUITADO: 'SETTLED',
+  CANCELADO: 'CANCELED',
+};
 
 export interface ContratoAlfa {
   contractNumber: string;
@@ -94,7 +99,7 @@ export function gerarCarteira(quantidade: number, comFalhas: boolean): ClienteAl
               originalAmountCents: original,
               currentAmountCents: Math.round(original * 1.15),
               dueDate: gerarDataVencimento(i),
-              status: STATUS[i % STATUS.length],
+              status: STATUS[obterSituacaoDoCredito(i)],
             },
           ],
       contacts: {

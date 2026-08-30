@@ -35,3 +35,28 @@ const registros = carregarCsv();
 export function obterCreditoReal(indice: number): RegistroCreditoReal {
   return registros[indice % registros.length];
 }
+
+export type SituacaoCredito = 'ATRASO' | 'NEGOCIACAO' | 'QUITADO' | 'CANCELADO';
+
+/**
+ * Deriva uma situação a partir de "inadimplente" (a coluna real "default
+ * payment next month") e da proporção paga -- não existe uma coluna
+ * pronta de "situação de cobrança" no dataset original, porque ele foi
+ * feito pra prever inadimplência, não pra representar uma carteira em
+ * cobrança. Critério: quem vai inadimplir no próximo mês está em
+ * atraso; entre quem não vai, quem já pagou tudo está quitado, quem não
+ * pagou nada está cancelado, e quem pagou uma parte está em negociação.
+ */
+export function obterSituacaoDoCredito(indice: number): SituacaoCredito {
+  const registro = obterCreditoReal(indice);
+  if (registro.inadimplente) {
+    return 'ATRASO';
+  }
+  if (registro.valorPagoCentavos <= 0) {
+    return 'CANCELADO';
+  }
+  if (registro.valorPagoCentavos >= registro.valorFaturaCentavos) {
+    return 'QUITADO';
+  }
+  return 'NEGOCIACAO';
+}
