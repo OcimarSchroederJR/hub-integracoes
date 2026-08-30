@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +15,19 @@ async function main() {
     update: {},
     create: { codigo: 'beta', nome: 'Parceiro Beta' },
   });
+
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminSenha = process.env.ADMIN_SENHA;
+  if (adminEmail && adminSenha) {
+    const senhaHash = await bcrypt.hash(adminSenha, 10);
+    await prisma.usuario.upsert({
+      where: { email: adminEmail },
+      update: { senhaHash },
+      create: { email: adminEmail, senhaHash },
+    });
+  } else {
+    console.warn('ADMIN_EMAIL/ADMIN_SENHA não definidos — usuário admin não foi criado.');
+  }
 }
 
 main()

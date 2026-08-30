@@ -48,29 +48,37 @@ npm install && npx prisma migrate deploy && npm run seed
 npm run start:dev
 ```
 
+A API exige login (ver [ADR 0006](docs/adr/0006-autenticacao-jwt-com-usuario-seed.md)) — exceto `/health` e `/metrics`. O `npm run seed` acima já criou o usuário admin a partir de `ADMIN_EMAIL`/`ADMIN_SENHA` do `.env`. Autentique e guarde o token:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@hub.local","senha":"admin123"}' | node -pe "JSON.parse(require('fs').readFileSync(0)).accessToken")
+```
+
 Dispare uma importação e acompanhe:
 
 ```bash
-curl -X POST http://localhost:3000/integracoes/alfa/execucoes
-# ou: curl -X POST http://localhost:3000/integracoes/beta/execucoes
-curl http://localhost:3000/execucoes/{execucaoId}
-curl "http://localhost:3000/execucoes/{execucaoId}/registros?situacao=REJEITADO"
+curl -X POST http://localhost:3000/integracoes/alfa/execucoes -H "Authorization: Bearer $TOKEN"
+# ou: curl -X POST http://localhost:3000/integracoes/beta/execucoes -H "Authorization: Bearer $TOKEN"
+curl http://localhost:3000/execucoes/{execucaoId} -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:3000/execucoes/{execucaoId}/registros?situacao=REJEITADO" -H "Authorization: Bearer $TOKEN"
 ```
 
 Se um registro ficar `FALHA` (esgotou as tentativas) ou `REJEITADO`, reprocesse com o payload bruto já arquivado, sem nova chamada ao parceiro:
 
 ```bash
-curl -X POST http://localhost:3000/execucoes/{execucaoId}/reprocessar
-curl -X POST http://localhost:3000/registros/{registroId}/reprocessar
+curl -X POST http://localhost:3000/execucoes/{execucaoId}/reprocessar -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost:3000/registros/{registroId}/reprocessar -H "Authorization: Bearer $TOKEN"
 ```
 
 Para reconstruir a história de um registro específico:
 
 ```bash
-curl http://localhost:3000/registros/{registroId}/eventos
+curl http://localhost:3000/registros/{registroId}/eventos -H "Authorization: Bearer $TOKEN"
 ```
 
-Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. Métricas cruas em `curl http://localhost:3000/metrics`, formato Prometheus.
+Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. Métricas cruas em `curl http://localhost:3000/metrics`, formato Prometheus — junto com `/health`, é a única rota que não exige login.
 
 ---
 
@@ -114,13 +122,14 @@ Depois da Fase 3, cinco funcionalidades foram acrescentadas por iniciativa próp
 
 ```bash
 cd cli && npm install && npm run build
+node dist/index.js login admin@hub.local admin123
 node dist/index.js execucoes:disparar alfa
 node dist/index.js execucoes:status <id>
 node dist/index.js sobreposicoes:listar
 node dist/index.js --help
 ```
 
-Aponta para `http://localhost:3000` por padrão; mude com a variável `HUB_API_URL`.
+Aponta para `http://localhost:3000` por padrão; mude com a variável `HUB_API_URL`. `login` guarda o token em `~/.hub-cli/token` e os outros comandos o usam automaticamente; `logout` apaga o token salvo.
 
 ---
 
@@ -135,6 +144,7 @@ As escolhas relevantes estão registradas como ADR, com contexto, alternativas d
 | [0003](docs/adr/0003-paginacao-via-fila.md) | Paginação propagada pela fila em vez de laço dentro do job |
 | [0004](docs/adr/0004-mysql-e-dynamodb.md) | MySQL para o estado, DynamoDB para a trilha de eventos |
 | [0005](docs/adr/0005-erro-de-dado-vs-erro-de-infra.md) | Erro de dado rejeita, erro de infraestrutura retenta |
+| [0006](docs/adr/0006-autenticacao-jwt-com-usuario-seed.md) | Autenticação JWT com usuário único via seed |
 
 Complementos: [contrato de normalização](docs/CONTRATO_DE_NORMALIZACAO.md), [runbook operacional](docs/RUNBOOK.md), [benchmark](docs/BENCHMARK.md), [uso de IA no desenvolvimento](docs/USO_DE_IA.md).
 
@@ -144,7 +154,7 @@ Complementos: [contrato de normalização](docs/CONTRATO_DE_NORMALIZACAO.md), [r
 
 Estas são escolhas conscientes de escopo, não itens esquecidos.
 
-Não há autenticação na API interna. O serviço é desenhado para rodar atrás de um gateway. Implementar JWT aqui adicionaria código sem exercitar nenhuma competência de integração.
+A autenticação (JWT, [ADR 0006](docs/adr/0006-autenticacao-jwt-com-usuario-seed.md)) não tem refresh token, rate limiting no login nem revogação antes da expiração — aceitável para uma ferramenta interna de portfólio, não para uma API exposta publicamente sem mitigação adicional.
 
 O fluxo de saída não tem confirmação de entrega. Se o parceiro aceita o `POST` e depois perde a mensagem internamente, o hub não descobre. A solução correta seria conciliação periódica comparando situação local e remota, descrita mas não implementada.
 

@@ -17,6 +17,8 @@ export const envSchema = z.object({
   FILA_CONCORRENCIA_NORMALIZACAO: z.coerce.number().int().positive().default(10),
   FILA_TENTATIVAS_MAXIMAS: z.coerce.number().int().positive().default(5),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET precisa ter pelo menos 16 caracteres'),
+  JWT_EXPIRES_IN: z.string().default('8h'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

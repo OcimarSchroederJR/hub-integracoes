@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import axios, { AxiosError } from 'axios';
+import { apagarToken, lerToken, salvarToken } from './token-store';
 
 const baseURL = process.env.HUB_API_URL ?? 'http://localhost:3000';
 const http = axios.create({ baseURL });
+
+const token = lerToken();
+if (token) {
+  http.defaults.headers.common.Authorization = `Bearer ${token}`;
+}
 
 function imprimir(dado: unknown): void {
   console.log(JSON.stringify(dado, null, 2));
@@ -73,5 +79,32 @@ programa
   .command('health')
   .description('consulta o health check do hub')
   .action(() => executar(() => http.get('/health')));
+
+programa
+  .command('login <email> <senha>')
+  .description('autentica e guarda o token em ~/.hub-cli/token para os próximos comandos')
+  .action(async (email: string, senha: string) => {
+    try {
+      const resposta = await http.post<{ accessToken: string }>('/auth/login', { email, senha });
+      salvarToken(resposta.data.accessToken);
+      console.log('Login realizado.');
+    } catch (erro) {
+      if (erro instanceof AxiosError && erro.response) {
+        console.error(`Erro HTTP ${erro.response.status}:`);
+        imprimir(erro.response.data);
+      } else {
+        console.error(`Falha ao chamar ${baseURL}: ${(erro as Error).message}`);
+      }
+      process.exitCode = 1;
+    }
+  });
+
+programa
+  .command('logout')
+  .description('apaga o token salvo localmente')
+  .action(() => {
+    apagarToken();
+    console.log('Token removido.');
+  });
 
 programa.parseAsync(process.argv);

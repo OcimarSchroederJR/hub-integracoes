@@ -77,6 +77,13 @@ model RegistroIntegracao {
   @@index([execucaoId, situacao])
 }
 
+model Usuario {
+  id        String   @id @default(uuid())
+  email     String   @unique @db.VarChar(191)
+  senhaHash String   @db.VarChar(191)
+  criadoEm  DateTime @default(now())
+}
+
 model Devedor {
   id           String   @id @default(uuid())
   documento    String   @unique @db.VarChar(14)

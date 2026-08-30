@@ -4,7 +4,9 @@ import Redis from 'ioredis';
 import { EnvConfig } from '../../config/env.schema';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { S3ArquivoBrutoService } from '../../infra/s3/s3-arquivo-bruto.service';
+import { Public } from '../../auth/public.decorator';
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(

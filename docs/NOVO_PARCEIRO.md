@@ -77,9 +77,11 @@ Em `env.schema.ts`, com prefixo `PARCEIRO_{NOME}_`. A aplicação deve recusar s
 ### 8. Simule antes de rodar a carteira real
 
 ```bash
-curl -X POST http://localhost:3000/integracoes/{nome}/execucoes
-curl "http://localhost:3000/execucoes/{id}/registros?situacao=REJEITADO"
+curl -X POST http://localhost:3000/integracoes/{nome}/execucoes -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:3000/execucoes/{id}/registros?situacao=REJEITADO" -H "Authorization: Bearer $TOKEN"
 ```
+
+(`$TOKEN` como descrito no [README](../README.md#rodando).)
 
 Taxa de rejeição acima de 10 por cento quase sempre indica erro de mapeamento, não dado ruim do parceiro. Leia os motivos antes de culpar a origem.
 

@@ -1,9 +1,20 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import nock from 'nock';
 import request from 'supertest';
 import { AmbienteTeste, derrubarAmbiente, subirAmbiente } from './setup/containers';
+
+const JWT_SECRET_TESTE = 'segredo-de-teste-com-mais-de-16-caracteres';
+
+function autenticado(app: INestApplication) {
+  const token = new JwtService({ secret: JWT_SECRET_TESTE }).sign({ sub: 'e2e', email: 'e2e@hub.local' });
+  return {
+    get: (url: string) => request(app.getHttpServer()).get(url).set('Authorization', `Bearer ${token}`),
+    post: (url: string) => request(app.getHttpServer()).post(url).set('Authorization', `Bearer ${token}`),
+  };
+}
 
 const ALFA_BASE_URL = 'http://alfa-mock.test';
 
@@ -49,7 +60,7 @@ async function aguardarConclusao(
 ): Promise<ExecucaoDto> {
   const inicio = Date.now();
   while (Date.now() - inicio < timeoutMs) {
-    const resposta = await request(app.getHttpServer()).get(`/execucoes/${execucaoId}`);
+    const resposta = await autenticado(app).get(`/execucoes/${execucaoId}`);
     if (resposta.body.situacao === 'CONCLUIDA') {
       return resposta.body;
     }
@@ -76,6 +87,7 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
     process.env.AWS_REGION = 'us-east-1';
     process.env.S3_BUCKET_RAW = 'hub-raw-payloads-teste';
     process.env.DYNAMO_TABLE_EVENTOS = 'hub-eventos-teste';
+    process.env.JWT_SECRET = JWT_SECRET_TESTE;
 
     const { AppModule } = await import('../src/app.module');
 
@@ -96,7 +108,7 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
   it('rejeita o registro com documento inválido e persiste o restante do lote', async () => {
     mockarPaginaUnica([clienteAlfa(1), clienteAlfa(2), clienteAlfa(3, { taxId: '00000000000' })]);
 
-    const disparo = await request(app.getHttpServer()).post('/integracoes/alfa/execucoes').expect(202);
+    const disparo = await autenticado(app).post('/integracoes/alfa/execucoes').expect(202);
 
     const execucao = await aguardarConclusao(app, disparo.body.id);
 
@@ -104,7 +116,7 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
     expect(execucao.totalPersistidos).toBe(2);
     expect(execucao.totalRejeitados).toBe(1);
 
-    const registrosRejeitados = await request(app.getHttpServer())
+    const registrosRejeitados = await autenticado(app)
       .get(`/execucoes/${disparo.body.id}/registros`)
       .query({ situacao: 'REJEITADO' });
 
@@ -116,7 +128,7 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
     const itens = [clienteAlfa(301), clienteAlfa(302)];
     mockarPaginaUnica(itens);
 
-    const disparo = await request(app.getHttpServer()).post('/integracoes/alfa/execucoes').expect(202);
+    const disparo = await autenticado(app).post('/integracoes/alfa/execucoes').expect(202);
     await aguardarConclusao(app, disparo.body.id);
 
     const s3 = new S3Client({
@@ -137,48 +149,42 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
   it('registra a trilha de eventos do registro persistido e do rejeitado (RF07)', async () => {
     mockarPaginaUnica([clienteAlfa(401), clienteAlfa(402, { taxId: '00000000000' })]);
 
-    const disparo = await request(app.getHttpServer()).post('/integracoes/alfa/execucoes').expect(202);
+    const disparo = await autenticado(app).post('/integracoes/alfa/execucoes').expect(202);
     await aguardarConclusao(app, disparo.body.id);
 
-    const registros = await request(app.getHttpServer()).get(`/execucoes/${disparo.body.id}/registros`);
+    const registros = await autenticado(app).get(`/execucoes/${disparo.body.id}/registros`);
     const persistido = registros.body.find((r: { situacao: string }) => r.situacao === 'PERSISTIDO');
     const rejeitado = registros.body.find((r: { situacao: string }) => r.situacao === 'REJEITADO');
 
-    const eventosPersistido = await request(app.getHttpServer()).get(`/registros/${persistido.id}/eventos`);
+    const eventosPersistido = await autenticado(app).get(`/registros/${persistido.id}/eventos`);
     expect(eventosPersistido.body).toHaveLength(1);
     expect(eventosPersistido.body[0].tipo).toBe('REGISTRO_PERSISTIDO');
     expect(eventosPersistido.body[0].execucaoId).toBe(disparo.body.id);
     expect(eventosPersistido.body[0].correlationId).toBe(disparo.body.correlationId);
 
-    const eventosRejeitado = await request(app.getHttpServer()).get(`/registros/${rejeitado.id}/eventos`);
+    const eventosRejeitado = await autenticado(app).get(`/registros/${rejeitado.id}/eventos`);
     expect(eventosRejeitado.body).toHaveLength(1);
     expect(eventosRejeitado.body[0].tipo).toBe('REGISTRO_REJEITADO');
     expect(eventosRejeitado.body[0].detalhe.motivo).toMatch(/Documento inválido/);
 
-    await request(app.getHttpServer()).get('/registros/id-inexistente/eventos').expect(404);
+    await autenticado(app).get('/registros/id-inexistente/eventos').expect(404);
   });
 
   it('reprocessar a mesma carteira não duplica dívidas (ADR 0002)', async () => {
     const itens = [clienteAlfa(101), clienteAlfa(102), clienteAlfa(103)];
 
     mockarPaginaUnica(itens);
-    const primeiraExecucao = await request(app.getHttpServer())
-      .post('/integracoes/alfa/execucoes')
-      .expect(202);
+    const primeiraExecucao = await autenticado(app).post('/integracoes/alfa/execucoes').expect(202);
     const primeiroResultado = await aguardarConclusao(app, primeiraExecucao.body.id);
     expect(primeiroResultado.totalPersistidos).toBe(3);
 
     mockarPaginaUnica(itens);
-    const segundaExecucao = await request(app.getHttpServer())
-      .post('/integracoes/alfa/execucoes')
-      .expect(202);
+    const segundaExecucao = await autenticado(app).post('/integracoes/alfa/execucoes').expect(202);
     const segundoResultado = await aguardarConclusao(app, segundaExecucao.body.id);
     expect(segundoResultado.totalPersistidos).toBe(3);
 
     mockarPaginaUnica(itens);
-    const terceiraExecucao = await request(app.getHttpServer())
-      .post('/integracoes/alfa/execucoes')
-      .expect(202);
+    const terceiraExecucao = await autenticado(app).post('/integracoes/alfa/execucoes').expect(202);
     const terceiroResultado = await aguardarConclusao(app, terceiraExecucao.body.id);
     expect(terceiroResultado.totalPersistidos).toBe(3);
 
@@ -202,8 +208,8 @@ describe('Importação do Parceiro Alfa (integração com MySQL, Redis e S3/Loca
     mockarPaginaUnica([clienteAlfa(201)]);
 
     const [primeira, segunda] = await Promise.all([
-      request(app.getHttpServer()).post('/integracoes/alfa/execucoes'),
-      request(app.getHttpServer()).post('/integracoes/alfa/execucoes'),
+      autenticado(app).post('/integracoes/alfa/execucoes'),
+      autenticado(app).post('/integracoes/alfa/execucoes'),
     ]);
 
     const situacoes = [primeira.status, segunda.status].sort();
