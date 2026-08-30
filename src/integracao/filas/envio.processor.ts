@@ -1,9 +1,9 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
 import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
-import { TrilhaEventos, TRILHA_EVENTOS } from '../../dominio/portas/trilha-eventos.port';
+import { EventosOutboxService } from './eventos-outbox.service';
 import { FILA_ENVIO, JobEnvio } from './constantes';
 
 @Processor(FILA_ENVIO, { concurrency: 5 })
@@ -12,7 +12,7 @@ export class EnvioProcessor extends WorkerHost {
 
   constructor(
     private readonly registroAdaptadores: RegistroAdaptadores,
-    @Inject(TRILHA_EVENTOS) private readonly trilhaEventos: TrilhaEventos,
+    private readonly eventosOutbox: EventosOutboxService,
   ) {
     super();
   }
@@ -34,7 +34,7 @@ export class EnvioProcessor extends WorkerHost {
       `Atualização de situação enviada a "${parceiroCodigo}": contrato ${atualizacao.numeroContrato} -> ${atualizacao.novaSituacao}`,
     );
 
-    await this.trilhaEventos.registrar({
+    await this.eventosOutbox.publicar({
       registroId,
       execucaoId,
       correlationId,

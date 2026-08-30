@@ -1,6 +1,6 @@
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { RegistroAdaptadores } from '../../parceiros/registro-adaptadores';
 import { ErroDeDado } from '../../dominio/erros/erro-de-dado';
@@ -8,7 +8,7 @@ import { RegistroCanonico } from '../../dominio/entidades/registro-canonico';
 import { calcularChaveIdempotencia } from '../../dominio/servicos/chave-idempotencia';
 import { executarComCorrelationId } from '../../infra/observabilidade/contexto-correlacao';
 import { MetricsService } from '../../infra/observabilidade/metrics.service';
-import { TrilhaEventos, TRILHA_EVENTOS } from '../../dominio/portas/trilha-eventos.port';
+import { EventosOutboxService } from './eventos-outbox.service';
 import { FILA_ENVIO, FILA_NORMALIZACAO, JobEnvio, JobNormalizacao } from './constantes';
 import { AvaliadorConclusaoService } from './avaliador-conclusao.service';
 
@@ -29,7 +29,7 @@ export class NormalizacaoProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly registroAdaptadores: RegistroAdaptadores,
     private readonly avaliadorConclusao: AvaliadorConclusaoService,
-    @Inject(TRILHA_EVENTOS) private readonly trilhaEventos: TrilhaEventos,
+    private readonly eventosOutbox: EventosOutboxService,
     private readonly metrics: MetricsService,
     @InjectQueue(FILA_ENVIO) private readonly filaEnvio: Queue<JobEnvio>,
   ) {
@@ -97,7 +97,7 @@ export class NormalizacaoProcessor extends WorkerHost {
       data: { totalFalhas: { increment: 1 } },
     });
 
-    await this.trilhaEventos.registrar({
+    await this.eventosOutbox.publicar({
       registroId: registro.id,
       execucaoId,
       correlationId,
@@ -182,7 +182,7 @@ export class NormalizacaoProcessor extends WorkerHost {
       data: { totalPersistidos: { increment: 1 } },
     });
 
-    await this.trilhaEventos.registrar({
+    await this.eventosOutbox.publicar({
       registroId: registro.id,
       execucaoId,
       correlationId,
@@ -235,7 +235,7 @@ export class NormalizacaoProcessor extends WorkerHost {
       data: { totalRejeitados: { increment: 1 } },
     });
 
-    await this.trilhaEventos.registrar({
+    await this.eventosOutbox.publicar({
       registroId: registro.id,
       execucaoId,
       correlationId,

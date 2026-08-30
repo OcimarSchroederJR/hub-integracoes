@@ -3,10 +3,12 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EnvConfig } from '../config/env.schema';
 import { ParceirosModule } from '../parceiros/parceiros.module';
-import { FILA_COLETA, FILA_ENVIO, FILA_NORMALIZACAO } from './filas/constantes';
+import { FILA_COLETA, FILA_ENVIO, FILA_EVENTOS_SAIDA, FILA_NORMALIZACAO } from './filas/constantes';
 import { ColetaProcessor } from './filas/coleta.processor';
 import { NormalizacaoProcessor } from './filas/normalizacao.processor';
 import { EnvioProcessor } from './filas/envio.processor';
+import { EventosOutboxService } from './filas/eventos-outbox.service';
+import { EventosOutboxAssinanteProcessor } from './filas/eventos-outbox-assinante.processor';
 import { AvaliadorConclusaoService } from './filas/avaliador-conclusao.service';
 import { FilaMetricsService } from './filas/fila-metrics.service';
 import { ExecucaoService } from './execucao.service';
@@ -38,12 +40,15 @@ const OPCOES_PADRAO_JOB = {
       { name: FILA_COLETA, defaultJobOptions: OPCOES_PADRAO_JOB },
       { name: FILA_NORMALIZACAO, defaultJobOptions: OPCOES_PADRAO_JOB },
       { name: FILA_ENVIO, defaultJobOptions: OPCOES_PADRAO_JOB },
+      { name: FILA_EVENTOS_SAIDA, defaultJobOptions: OPCOES_PADRAO_JOB },
     ),
   ],
   providers: [
     ColetaProcessor,
     NormalizacaoProcessor,
     EnvioProcessor,
+    EventosOutboxService,
+    EventosOutboxAssinanteProcessor,
     AvaliadorConclusaoService,
     FilaMetricsService,
     ExecucaoService,

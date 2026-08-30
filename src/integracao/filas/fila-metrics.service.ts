@@ -3,7 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Gauge } from 'prom-client';
 import { MetricsService } from '../../infra/observabilidade/metrics.service';
-import { FILA_COLETA, FILA_ENVIO, FILA_NORMALIZACAO } from './constantes';
+import { FILA_COLETA, FILA_ENVIO, FILA_EVENTOS_SAIDA, FILA_NORMALIZACAO } from './constantes';
 
 /**
  * Profundidade de fila e fila de mortos são medidas sob demanda, no
@@ -20,8 +20,14 @@ export class FilaMetricsService implements OnModuleInit {
     @InjectQueue(FILA_COLETA) filaColeta: Queue,
     @InjectQueue(FILA_NORMALIZACAO) filaNormalizacao: Queue,
     @InjectQueue(FILA_ENVIO) filaEnvio: Queue,
+    @InjectQueue(FILA_EVENTOS_SAIDA) filaEventosSaida: Queue,
   ) {
-    this.filas = { coleta: filaColeta, normalizacao: filaNormalizacao, envio: filaEnvio };
+    this.filas = {
+      coleta: filaColeta,
+      normalizacao: filaNormalizacao,
+      envio: filaEnvio,
+      'eventos-saida': filaEventosSaida,
+    };
   }
 
   onModuleInit(): void {
