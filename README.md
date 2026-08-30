@@ -96,6 +96,32 @@ O painel Grafana ("Hub de Integrações", provisionado como código em [observab
 
 ---
 
+## Além do escopo original
+
+Depois da Fase 3, cinco funcionalidades foram acrescentadas por iniciativa própria — não pedidas pelos requisitos nem pelos ADRs — para explorar problemas de integração que o roadmap original não cobria.
+
+**Painel de controle ao vivo do mock.** `GET /_controle/alfa` e `POST /_controle/alfa` (no mock, porta 4000) leem e ajustam em tempo real a taxa de erro simulada, a latência e o limite de requisições do Alfa, sem reiniciar o container — útil para forçar cenários de falha sob demanda em vez de esperar a aleatoriedade padrão.
+
+**Limitador de requisições adaptativo.** O `AlfaAdapter` mantém um atraso interno que cresce geometricamente a cada 429/500 recebido e decai pela metade a cada sucesso, independente do limitador estático do BullMQ. Visível na métrica `hub_atraso_adaptativo_ms` (Prometheus/Grafana) e nos logs (`Recebi 500 do Alfa, aumentando atraso adaptativo para...`).
+
+**Outbox de eventos para consumidores internos.** Todo evento que já ia para a trilha do DynamoDB agora também é publicado numa fila BullMQ dedicada (`eventos-saida`), via `EventosOutboxService`. Existe um processor de demonstração (`EventosOutboxAssinanteProcessor`) que só loga o que recebe, no lugar de um consumidor interno real — o ponto é mostrar o padrão, não implementar um consumidor específico.
+
+**Detecção de sobreposição entre parceiros.** Quando o mesmo devedor (mesmo documento) tem dívidas ativas em dois parceiros diferentes com valor atualizado parecido (tolerância de 10%), o hub grava uma linha em `SobreposicaoDetectada` para revisão manual — não decide nem cancela nada. Consulte com `GET /devedores/sobreposicoes`. Os dados gerados por padrão pelo mock já incluem uma sobreposição proposital (cliente 0 do Alfa e do Beta compartilham o mesmo documento) para dar para testar isso de ponta a ponta sem precisar montar cenário manualmente.
+
+**CLI administrativo.** Um cliente de linha de comando para a API do hub, em [cli/](cli/), independente do backend (`commander` + `axios`, próprio `package.json`/build, no mesmo padrão do `mock-parceiros/`):
+
+```bash
+cd cli && npm install && npm run build
+node dist/index.js execucoes:disparar alfa
+node dist/index.js execucoes:status <id>
+node dist/index.js sobreposicoes:listar
+node dist/index.js --help
+```
+
+Aponta para `http://localhost:3000` por padrão; mude com a variável `HUB_API_URL`.
+
+---
+
 ## Decisões de projeto
 
 As escolhas relevantes estão registradas como ADR, com contexto, alternativas descartadas e consequências.

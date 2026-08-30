@@ -115,3 +115,21 @@ jobs:
         working-directory: mock-parceiros
       - run: npm run build
         working-directory: mock-parceiros
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - run: npm ci
+        working-directory: cli
+      - run: npx tsc --noEmit
+        working-directory: cli
+      - run: npm run build
+        working-directory: cli
