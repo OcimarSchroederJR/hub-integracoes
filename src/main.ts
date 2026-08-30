@@ -7,6 +7,7 @@ import { LoggerJsonService } from './infra/observabilidade/logger-json.service';
 async function bootstrap() {
   const logger = new LoggerJsonService();
   const app = await NestFactory.create(AppModule, { logger });
+  app.enableCors();
 
   const config = new DocumentBuilder()
     .setTitle('Hub de Integrações com Parceiros')

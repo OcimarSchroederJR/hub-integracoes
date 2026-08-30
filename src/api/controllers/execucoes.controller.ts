@@ -21,6 +21,14 @@ export class ExecucoesController {
     return this.execucaoService.dispararExecucao(parceiro);
   }
 
+  @Get('execucoes')
+  @ApiOperation({ summary: 'Lista as execuções mais recentes, opcionalmente filtrando por parceiro' })
+  @ApiQuery({ name: 'parceiro', required: false, example: 'alfa' })
+  @ApiQuery({ name: 'limite', required: false, example: 50 })
+  listarExecucoes(@Query('parceiro') parceiro?: string, @Query('limite') limite?: string) {
+    return this.execucaoService.listarExecucoes(parceiro, limite ? Number(limite) : undefined);
+  }
+
   @Get('execucoes/:id')
   @ApiOperation({ summary: 'Consulta o status de uma execução' })
   consultarExecucao(@Param('id') id: string) {
