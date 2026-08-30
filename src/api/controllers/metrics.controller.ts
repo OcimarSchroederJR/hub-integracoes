@@ -1,4 +1,5 @@
 import { Controller, Get, Res } from '@nestjs/common';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Response } from 'express';
 import { MetricsService } from '../../infra/observabilidade/metrics.service';
 import { Public } from '../../auth/public.decorator';
@@ -9,6 +10,7 @@ export class MetricsController {
   constructor(private readonly metrics: MetricsService) {}
 
   @Get()
+  @ApiExcludeEndpoint()
   async metricas(@Res() res: Response): Promise<void> {
     res.set('Content-Type', this.metrics.registry.contentType);
     res.send(await this.metrics.registry.metrics());

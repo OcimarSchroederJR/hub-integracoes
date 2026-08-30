@@ -1,11 +1,13 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import Redis from 'ioredis';
 import { EnvConfig } from '../../config/env.schema';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { S3ArquivoBrutoService } from '../../infra/s3/s3-arquivo-bruto.service';
 import { Public } from '../../auth/public.decorator';
 
+@ApiTags('health')
 @Public()
 @Controller('health')
 export class HealthController {
@@ -16,6 +18,7 @@ export class HealthController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'Verifica banco, fila e armazenamento (rota pública, sem login)' })
   async verificar() {
     const [banco, redis, armazenamento] = await Promise.all([
       this.verificarBanco(),

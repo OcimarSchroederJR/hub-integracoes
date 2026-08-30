@@ -48,7 +48,11 @@ npm install && npx prisma migrate deploy && npm run seed
 npm run start:dev
 ```
 
-A API exige login (ver [ADR 0006](docs/adr/0006-autenticacao-jwt-com-usuario-seed.md)) — exceto `/health` e `/metrics`. O `npm run seed` acima já criou o usuário admin a partir de `ADMIN_EMAIL`/`ADMIN_SENHA` do `.env`. Autentique e guarde o token:
+A API exige login (ver [ADR 0006](docs/adr/0006-autenticacao-jwt-com-usuario-seed.md)) — exceto `/health` e `/metrics`. O `npm run seed` acima já criou o usuário admin a partir de `ADMIN_EMAIL`/`ADMIN_SENHA` do `.env`.
+
+**Testando pela interface:** `http://localhost:3000/docs` tem o Swagger com todas as rotas. Faça `POST /auth/login`, copie o `accessToken` da resposta, clique em "Authorize" (canto superior direito) e cole o token — as chamadas seguintes já saem autenticadas.
+
+**Testando por linha de comando:** autentique e guarde o token:
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
