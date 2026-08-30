@@ -2,7 +2,7 @@
 
 Registro de como a IA foi usada neste projeto, o que ela resolveu bem e onde precisou ser corrigida. Diferente de uma seção de marketing, o valor deste documento está nos erros: onde a IA errou, por que errou, e como o erro foi pego.
 
-Ferramenta: Claude Code (CLI). Modelo: Claude Sonnet 5.
+Ferramenta: assistente de IA operando via CLI, com acesso direto ao terminal e ao editor.
 
 O projeto inteiro — do esqueleto da Fase 1 aos painéis do Grafana da Fase 3 — foi construído com a IA operando o terminal diretamente: escrevendo código, rodando `docker compose`, subindo o serviço de verdade, disparando importações reais contra o mock, lendo os logs e só então decidindo o próximo passo. Isso muda o que vale a pena registrar aqui: os erros abaixo não foram encontrados relendo código, foram encontrados rodando o sistema e vendo o comportamento errado acontecer.
 
