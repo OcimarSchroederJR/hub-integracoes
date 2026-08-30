@@ -1,3 +1,5 @@
+import { obterCreditoReal } from './dados-reais';
+
 function calcularDigitosCpf(base9: string): string {
   const calcular = (tamanho: number): number => {
     let soma = 0;
@@ -73,7 +75,7 @@ export function gerarCarteira(quantidade: number, comFalhas: boolean): ClienteAl
   const clientes: ClienteAlfa[] = [];
   for (let i = 0; i < quantidade; i++) {
     const nome = NOMES[i % NOMES.length];
-    const original = 50_000 + ((i * 137) % 500_000);
+    const original = obterCreditoReal(i).valorFaturaCentavos;
 
     const documentoInvalido = comFalhas && i % 20 === 3;
     const contratosVazios = comFalhas && i % 20 === 11;

@@ -76,6 +76,8 @@ Painel Grafana em `http://localhost:3001`, usuário `admin` e senha `admin`. Mé
 
 ## O que observar enquanto roda
 
+Os valores de fatura/dívida do mock não são gerados por fórmula: vêm de uma amostra real do dataset público [Default of Credit Card Clients](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients) (UCI Machine Learning Repository, Yeh & Lien, 2009), embutida em [mock-parceiros/data/creditos-reais.csv](mock-parceiros/data/creditos-reais.csv). Nome, CPF, telefone e e-mail continuam sintéticos — o dataset é anonimizado e não tem esses campos, então não existe combinação "100% real" possível aqui sem violar a privacidade de gente de verdade.
+
 O mock dos parceiros falha de propósito. O Alfa devolve 429 acima de 60 requisições por minuto, 500 em cerca de 5 por cento das chamadas, latência aleatória de até 3 segundos e cerca de 10 por cento dos clientes com defeito de dado (documento inválido ou sem nenhum contrato). O Beta entrega um CSV com campo obrigatório vazio, data 31/02, valor não numérico e uma linha duplicada. Um importador ingênuo quebra nesse cenário. O comportamento esperado aqui é outro.
 
 O limitador da fila de coleta impede que o 429 aconteça, mesmo com a carteira sendo puxada o mais rápido possível.

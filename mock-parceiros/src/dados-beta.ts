@@ -1,3 +1,5 @@
+import { obterCreditoReal } from './dados-reais';
+
 function calcularDigitosCpf(base9: string): string {
   const calcularD1 = () => {
     let soma = 0;
@@ -66,13 +68,16 @@ export function gerarCarteiraBetaCsv(quantidade: number, comFalhas: boolean): st
 
   for (let i = 0; i < quantidade; i++) {
     // i === 0 reaproveita de propósito a mesma semente do cliente 0 do Alfa
-    // (ver dados.ts), com um valor atualizado próximo, pra existir uma
-    // sobreposição real e detectável entre os dois parceiros nos dados
-    // gerados por padrão -- ver SobreposicaoService.
+    // (ver dados.ts) e o mesmo registro do dataset real (índice 0), pra
+    // existir uma sobreposição real e detectável entre os dois parceiros
+    // nos dados gerados por padrão -- ver SobreposicaoService.
     const cpf = i === 0 ? gerarCpf(100_000_000) : gerarCpf(200_000_000 + i * 11);
     const cpfFormatado = i % 2 === 0 ? formatarCpfComMascara(cpf) : cpf;
     const nome = NOMES[i % NOMES.length];
-    const original = i === 0 ? 50_000 : 40_000 + ((i * 211) % 400_000);
+    // Offset de 1500 pra não sortear exatamente os mesmos registros do
+    // dataset que o Alfa usa nos mesmos índices (i === 0 é a exceção
+    // proposital, ver acima).
+    const original = obterCreditoReal(i === 0 ? 0 : i + 1500).valorFaturaCentavos;
     const atualizado = Math.round(original * 1.13);
     const numeroContrato = `CT-B${String(70_000 + i)}`;
     const telefone = `81${String(988_000_000 + i).slice(0, 9)}`;
