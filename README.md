@@ -135,6 +135,16 @@ node dist/index.js --help
 
 Aponta para `http://localhost:3000` por padrão; mude com a variável `HUB_API_URL`. `login` guarda o token em `~/.hub-cli/token` e os outros comandos o usam automaticamente; `logout` apaga o token salvo.
 
+**Painel web.** Um frontend React (Vite + TypeScript) em [frontend/](frontend/), na branch `feature/frontend`, cobrindo os mesmos fluxos do CLI/Swagger com uma interface de verdade: login, disparar execução, acompanhar status com atualização automática, listar/reprocessar registros e ver sobreposições detectadas.
+
+```bash
+cd frontend && npm install
+cp .env.example .env   # ajuste VITE_API_URL se a API não estiver em localhost:3000
+npm run dev
+```
+
+Abre em `http://localhost:5173`. O hub precisa estar rodando com CORS liberado (`app.enableCors()` em `src/main.ts`) e o usuário admin já criado pelo seed.
+
 ---
 
 ## Decisões de projeto
