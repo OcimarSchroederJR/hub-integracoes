@@ -7,7 +7,10 @@ export function Layout() {
   return (
     <div className="layout">
       <header className="topbar">
-        <span className="brand">Hub de Integrações</span>
+        <span className="brand">
+          <span className="ponto" />
+          Hub de Integrações
+        </span>
         <nav>
           <NavLink to="/" end>
             Execuções

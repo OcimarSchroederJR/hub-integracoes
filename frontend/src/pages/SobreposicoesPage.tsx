@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, mensagemDeErro } from '../api/client';
 import type { Sobreposicao } from '../api/types';
+import { Carregando } from '../components/Spinner';
 
 function formatarCentavos(centavos: number): string {
   return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -29,40 +30,45 @@ export function SobreposicoesPage() {
       {erro && <p className="mensagem-erro">{erro}</p>}
 
       {carregando ? (
-        <p>Carregando…</p>
+        <Carregando />
       ) : sobreposicoes.length === 0 ? (
-        <p className="texto-vazio">Nenhuma sobreposição detectada.</p>
+        <div className="estado-vazio">
+          <div className="icone">◌</div>
+          <p>Nenhuma sobreposição detectada.</p>
+        </div>
       ) : (
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Devedor</th>
-              <th>Documento</th>
-              <th>Parceiro A</th>
-              <th>Valor A</th>
-              <th>Parceiro B</th>
-              <th>Valor B</th>
-              <th>Detectado em</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sobreposicoes.map((sobreposicao) => (
-              <tr key={sobreposicao.id}>
-                <td>{sobreposicao.devedor?.nome ?? '—'}</td>
-                <td>{sobreposicao.devedor?.documento ?? '—'}</td>
-                <td>
-                  {sobreposicao.parceiroACodigo} · {sobreposicao.numeroContratoA}
-                </td>
-                <td>{formatarCentavos(sobreposicao.valorAtualizadoA)}</td>
-                <td>
-                  {sobreposicao.parceiroBCodigo} · {sobreposicao.numeroContratoB}
-                </td>
-                <td>{formatarCentavos(sobreposicao.valorAtualizadoB)}</td>
-                <td>{new Date(sobreposicao.detectadoEm).toLocaleString('pt-BR')}</td>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th>Devedor</th>
+                <th>Documento</th>
+                <th>Parceiro A</th>
+                <th>Valor A</th>
+                <th>Parceiro B</th>
+                <th>Valor B</th>
+                <th>Detectado em</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sobreposicoes.map((sobreposicao) => (
+                <tr key={sobreposicao.id}>
+                  <td>{sobreposicao.devedor?.nome ?? '—'}</td>
+                  <td>{sobreposicao.devedor?.documento ?? '—'}</td>
+                  <td>
+                    {sobreposicao.parceiroACodigo} · {sobreposicao.numeroContratoA}
+                  </td>
+                  <td className="numerico">{formatarCentavos(sobreposicao.valorAtualizadoA)}</td>
+                  <td>
+                    {sobreposicao.parceiroBCodigo} · {sobreposicao.numeroContratoB}
+                  </td>
+                  <td className="numerico">{formatarCentavos(sobreposicao.valorAtualizadoB)}</td>
+                  <td>{new Date(sobreposicao.detectadoEm).toLocaleString('pt-BR')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

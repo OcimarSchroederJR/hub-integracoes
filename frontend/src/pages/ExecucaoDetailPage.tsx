@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, mensagemDeErro } from '../api/client';
 import type { Execucao, Registro, SituacaoRegistro } from '../api/types';
 import { StatusBadge } from '../components/StatusBadge';
+import { Carregando } from '../components/Spinner';
 
 const SITUACOES: Array<SituacaoRegistro | 'TODAS'> = ['TODAS', 'PENDENTE', 'PERSISTIDO', 'REJEITADO', 'FALHA'];
 
@@ -63,7 +64,7 @@ export function ExecucaoDetailPage() {
   }
 
   if (!execucao) {
-    return <p>{erro ?? 'Carregando…'}</p>;
+    return erro ? <p className="mensagem-erro">{erro}</p> : <Carregando />;
   }
 
   const podeReprocessar = execucao.totalFalhas > 0 || execucao.totalRejeitados > 0;
@@ -126,44 +127,49 @@ export function ExecucaoDetailPage() {
       </div>
 
       {registros.length === 0 ? (
-        <p className="texto-vazio">Nenhum registro com esse filtro.</p>
+        <div className="estado-vazio">
+          <div className="icone">◌</div>
+          <p>Nenhum registro com esse filtro.</p>
+        </div>
       ) : (
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Identificador</th>
-              <th>Situação</th>
-              <th>Motivo</th>
-              <th>Tentativas</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {registros.map((registro) => (
-              <tr key={registro.id}>
-                <td>{registro.identificadorExterno}</td>
-                <td>
-                  <StatusBadge situacao={registro.situacao} />
-                </td>
-                <td className="texto-truncado" title={registro.motivoRejeicao ?? ''}>
-                  {registro.motivoRejeicao ?? '—'}
-                </td>
-                <td>{registro.tentativas}</td>
-                <td>
-                  {(registro.situacao === 'FALHA' || registro.situacao === 'REJEITADO') && (
-                    <button
-                      className="botao-pequeno"
-                      onClick={() => reprocessarRegistro(registro.id)}
-                      disabled={acao !== null}
-                    >
-                      {acao === registro.id ? '…' : 'reprocessar'}
-                    </button>
-                  )}
-                </td>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th>Identificador</th>
+                <th>Situação</th>
+                <th>Motivo</th>
+                <th>Tentativas</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {registros.map((registro) => (
+                <tr key={registro.id}>
+                  <td>{registro.identificadorExterno}</td>
+                  <td>
+                    <StatusBadge situacao={registro.situacao} />
+                  </td>
+                  <td className="texto-truncado" title={registro.motivoRejeicao ?? ''}>
+                    {registro.motivoRejeicao ?? '—'}
+                  </td>
+                  <td className="numerico">{registro.tentativas}</td>
+                  <td>
+                    {(registro.situacao === 'FALHA' || registro.situacao === 'REJEITADO') && (
+                      <button
+                        className="botao-pequeno"
+                        onClick={() => reprocessarRegistro(registro.id)}
+                        disabled={acao !== null}
+                      >
+                        {acao === registro.id ? '…' : 'reprocessar'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

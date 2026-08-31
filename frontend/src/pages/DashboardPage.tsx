@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, mensagemDeErro } from '../api/client';
 import type { Execucao } from '../api/types';
 import { StatusBadge } from '../components/StatusBadge';
+import { Carregando } from '../components/Spinner';
+
+const SITUACOES_EM_ANDAMENTO = new Set(['PENDENTE', 'PROCESSANDO']);
 
 export function DashboardPage() {
   const [execucoes, setExecucoes] = useState<Execucao[]>([]);
@@ -27,6 +30,15 @@ export function DashboardPage() {
     const intervalo = setInterval(carregar, 5000);
     return () => clearInterval(intervalo);
   }, [carregar]);
+
+  const kpis = useMemo(() => {
+    const emAndamento = execucoes.filter((execucao) => SITUACOES_EM_ANDAMENTO.has(execucao.situacao)).length;
+    const comFalha = execucoes.filter((execucao) => execucao.totalFalhas > 0).length;
+    const totalRecebidos = execucoes.reduce((soma, execucao) => soma + execucao.totalRecebidos, 0);
+    const totalPersistidos = execucoes.reduce((soma, execucao) => soma + execucao.totalPersistidos, 0);
+    const taxaSucesso = totalRecebidos > 0 ? Math.round((totalPersistidos / totalRecebidos) * 100) : null;
+    return { emAndamento, comFalha, taxaSucesso };
+  }, [execucoes]);
 
   async function dispararExecucao(parceiro: string): Promise<void> {
     setDisparando(parceiro);
@@ -55,45 +67,71 @@ export function DashboardPage() {
         </div>
       </div>
 
+      {!carregando && execucoes.length > 0 && (
+        <div className="kpis">
+          <div className="kpi">
+            <div className="kpi-rotulo">Execuções recentes</div>
+            <div className="kpi-valor">{execucoes.length}</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-rotulo">Em andamento</div>
+            <div className="kpi-valor cor-acento">{kpis.emAndamento}</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-rotulo">Com falha</div>
+            <div className={`kpi-valor ${kpis.comFalha > 0 ? 'cor-critico' : ''}`}>{kpis.comFalha}</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-rotulo">Taxa de persistência</div>
+            <div className="kpi-valor cor-bom">{kpis.taxaSucesso !== null ? `${kpis.taxaSucesso}%` : '—'}</div>
+          </div>
+        </div>
+      )}
+
       {erro && <p className="mensagem-erro">{erro}</p>}
 
       {carregando ? (
-        <p>Carregando…</p>
+        <Carregando />
       ) : execucoes.length === 0 ? (
-        <p className="texto-vazio">Nenhuma execução ainda. Dispare uma acima.</p>
+        <div className="estado-vazio">
+          <div className="icone">◌</div>
+          <p>Nenhuma execução ainda. Dispare uma acima para começar.</p>
+        </div>
       ) : (
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Parceiro</th>
-              <th>Situação</th>
-              <th>Recebidos</th>
-              <th>Persistidos</th>
-              <th>Rejeitados</th>
-              <th>Falhas</th>
-              <th>Iniciada em</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {execucoes.map((execucao) => (
-              <tr key={execucao.id}>
-                <td>{execucao.parceiro?.codigo ?? '—'}</td>
-                <td>
-                  <StatusBadge situacao={execucao.situacao} />
-                </td>
-                <td>{execucao.totalRecebidos}</td>
-                <td>{execucao.totalPersistidos}</td>
-                <td>{execucao.totalRejeitados}</td>
-                <td>{execucao.totalFalhas}</td>
-                <td>{new Date(execucao.iniciadaEm).toLocaleString('pt-BR')}</td>
-                <td>
-                  <Link to={`/execucoes/${execucao.id}`}>ver detalhes</Link>
-                </td>
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th>Parceiro</th>
+                <th>Situação</th>
+                <th>Recebidos</th>
+                <th>Persistidos</th>
+                <th>Rejeitados</th>
+                <th>Falhas</th>
+                <th>Iniciada em</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {execucoes.map((execucao) => (
+                <tr key={execucao.id}>
+                  <td>{execucao.parceiro?.codigo ?? '—'}</td>
+                  <td>
+                    <StatusBadge situacao={execucao.situacao} />
+                  </td>
+                  <td className="numerico">{execucao.totalRecebidos}</td>
+                  <td className="numerico">{execucao.totalPersistidos}</td>
+                  <td className="numerico">{execucao.totalRejeitados}</td>
+                  <td className="numerico">{execucao.totalFalhas}</td>
+                  <td>{new Date(execucao.iniciadaEm).toLocaleString('pt-BR')}</td>
+                  <td>
+                    <Link to={`/execucoes/${execucao.id}`}>ver detalhes</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
