@@ -1,0 +1,467 @@
+:root {
+  /* Paleta validada (contraste + daltonismo) — ver skill de dataviz, references/palette.md.
+     App é intencionalmente dark-only (ferramenta interna), então os tokens
+     de dark mode viram os únicos valores, sem alternância. */
+  --plano-fundo: #0d0d0d;
+  --superficie: #1a1a19;
+  --superficie-2: #232322;
+  --borda: rgba(255, 255, 255, 0.1);
+  --texto-primario: #ffffff;
+  --texto-secundario: #c3c2b7;
+  --texto-fraco: #898781;
+  --acento: #3987e5;
+  --acento-fraco: rgba(57, 135, 229, 0.16);
+
+  /* paleta de status fixa — nunca reaproveitada para outra coisa */
+  --status-bom: #0ca30c;
+  --status-atencao: #fab219;
+  --status-serio: #ec835a;
+  --status-critico: #e66767;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--plano-fundo);
+  color: var(--texto-primario);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+code {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+a {
+  color: var(--acento);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  background: var(--acento);
+  color: #ffffff;
+  border: none;
+  border-radius: 7px;
+  padding: 0.55rem 1.05rem;
+  font-weight: 600;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+button:hover:not(:disabled) {
+  background: #4f96e8;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.botao-ghost {
+  background: transparent;
+  color: var(--texto-secundario);
+  border: 1px solid var(--borda);
+}
+
+.botao-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--texto-primario);
+}
+
+.botao-pequeno {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  border-radius: 6px;
+}
+
+input,
+select {
+  font: inherit;
+  background: var(--plano-fundo);
+  border: 1px solid var(--borda);
+  color: var(--texto-primario);
+  border-radius: 7px;
+  padding: 0.55rem 0.65rem;
+  transition: border-color 0.15s ease;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--acento);
+}
+
+/* --- layout geral --- */
+
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.8rem;
+  padding: 0.9rem 1.75rem;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+}
+
+.topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.topbar .brand .ponto {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-fraco);
+}
+
+.topbar nav {
+  display: flex;
+  gap: 1.4rem;
+  flex: 1;
+}
+
+.topbar nav a {
+  color: var(--texto-fraco);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.3rem 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease;
+}
+
+.topbar nav a:hover {
+  color: var(--texto-secundario);
+}
+
+.topbar nav a.active {
+  color: var(--texto-primario);
+  border-bottom-color: var(--acento);
+}
+
+.conteudo {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1140px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* --- login --- */
+
+.tela-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(57, 135, 229, 0.08), transparent 45%),
+    var(--plano-fundo);
+}
+
+.cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 2.2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.cartao::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--acento), transparent);
+}
+
+.form-login {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-login label {
+  font-size: 0.82rem;
+  color: var(--texto-secundario);
+  margin-top: 0.5rem;
+}
+
+.form-login button {
+  margin-top: 1.3rem;
+}
+
+.subtitulo {
+  color: var(--texto-fraco);
+  margin: 0 0 1.2rem;
+  font-size: 0.9rem;
+}
+
+/* --- componentes de conteúdo --- */
+
+.cabecalho-secao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 2rem 0 1rem;
+}
+
+.cabecalho-secao:first-child {
+  margin-top: 0;
+}
+
+.acoes {
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* --- linha de KPIs --- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 1.1rem 1.3rem;
+}
+
+.kpi .kpi-rotulo {
+  font-size: 0.78rem;
+  color: var(--texto-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.kpi .kpi-valor {
+  font-size: 1.85rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.kpi .kpi-valor.cor-bom {
+  color: var(--status-bom);
+}
+
+.kpi .kpi-valor.cor-critico {
+  color: var(--status-critico);
+}
+
+.kpi .kpi-valor.cor-acento {
+  color: var(--acento);
+}
+
+.tabela-wrap {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela th,
+.tabela td {
+  text-align: left;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--borda);
+  font-size: 0.88rem;
+}
+
+.tabela th {
+  color: var(--texto-fraco);
+  font-weight: 600;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--superficie-2);
+}
+
+.tabela tbody tr {
+  transition: background-color 0.1s ease;
+}
+
+.tabela tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tabela tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tabela td.numerico {
+  font-variant-numeric: tabular-nums;
+}
+
+.texto-truncado {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.estado-vazio {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--texto-fraco);
+  background: var(--superficie);
+  border: 1px dashed var(--borda);
+  border-radius: 10px;
+}
+
+.estado-vazio .icone {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+
+.mensagem-erro {
+  background: rgba(230, 103, 103, 0.12);
+  border: 1px solid rgba(230, 103, 103, 0.35);
+  color: #f3a9a9;
+  padding: 0.65rem 0.9rem;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+
+.detalhes-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.9rem;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 1.1rem 1.3rem;
+  margin-bottom: 1.5rem;
+}
+
+.detalhes-grade dt {
+  color: var(--texto-fraco);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+
+.detalhes-grade dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- carregando --- */
+
+.carregando {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--texto-fraco);
+  padding: 2rem 0;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid var(--borda);
+  border-top-color: var(--acento);
+  animation: girar 0.7s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- badge de situação (paleta de status fixa, nunca reaproveitada) --- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.badge-bom {
+  background: rgba(12, 163, 12, 0.16);
+  color: #3ecf3e;
+}
+
+.badge-info {
+  background: var(--acento-fraco);
+  color: #6fa8ec;
+}
+
+.badge-atencao {
+  background: rgba(250, 178, 25, 0.16);
+  color: #fac346;
+}
+
+.badge-critico {
+  background: rgba(230, 103, 103, 0.18);
+  color: #f08b8b;
+}
+
+.badge-neutro {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--texto-secundario);
+}

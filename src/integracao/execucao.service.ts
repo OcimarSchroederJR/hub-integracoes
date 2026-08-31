@@ -59,8 +59,20 @@ export class ExecucaoService {
     return { id: execucao.id, correlationId: execucao.correlationId, situacao: execucao.situacao };
   }
 
+  async listarExecucoes(parceiroCodigo?: string, limite = 50) {
+    return this.prisma.execucaoIntegracao.findMany({
+      where: parceiroCodigo ? { parceiro: { codigo: parceiroCodigo } } : undefined,
+      include: { parceiro: true },
+      orderBy: { iniciadaEm: 'desc' },
+      take: Math.min(limite, 200),
+    });
+  }
+
   async consultarExecucao(id: string) {
-    const execucao = await this.prisma.execucaoIntegracao.findUnique({ where: { id } });
+    const execucao = await this.prisma.execucaoIntegracao.findUnique({
+      where: { id },
+      include: { parceiro: true },
+    });
     if (!execucao) {
       throw new NotFoundException(`Execução "${id}" não encontrada`);
     }
